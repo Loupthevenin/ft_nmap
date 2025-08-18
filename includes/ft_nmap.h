@@ -36,18 +36,31 @@ typedef enum e_scan_type
 
 typedef struct s_config
 {
-	char *ip;      // adresse IP
-	char *file;    // fichier contenant des IPs
-	char *ports;   // plage ou liste de ports
-	int speedup;   // nombre de threads max
-	int scans;     // bitmask
-	int show_help; // flag pour afficher l'aide
+	char *ip;    // adresse IP
+	char *file;  // fichier contenant des IPs
+	char *ports; // plage ou liste de ports
+	int speedup; // nombre de threads max
+	// int scans;     // bitmask
+	char *scan_type; // type de scan
+	int show_help;   // flag pour afficher l'aide
 }		t_config;
 
-// Main
+// parser.c
+int		validate_config(t_config *config);
+int		is_valid_port(const char *port);
+int		is_valid_argument(const char *arg);
+int		is_valid_ip(const char *ip);
+int		is_valid_scan_type(const char *type);
+int		is_valid_speedup(int speedup);
+int		file_exists(const char *filename);
+int		validate_ports(const char *ports_str);
+void	init_config(t_config *config);
+void	free_config(t_config *config);
 int		parse_args(t_config *config, int argc, char **argv);
 
 // Utils
 void	print_help(void);
+void	print_config(const t_config *config);
+void	free_args(char **args);
 
 #endif
