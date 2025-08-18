@@ -45,6 +45,7 @@ typedef struct s_config
 }		t_config;
 
 // Main
+int		parse_args(t_config *config, int argc, char **argv);
 
 // Utils
 void	print_help(void);
