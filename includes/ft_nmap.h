@@ -32,28 +32,35 @@ typedef enum e_scan_type
 	SCAN_XMAS = 1 << 4,     // 010000
 	SCAN_UDP = 1 << 5,      // 100000
 	SCAN_ALL = (1 << 6) - 1 // 111111
-}			t_scan_type;
+}				t_scan_type;
 
 typedef struct s_config
 {
 	char *ip;   // adresse IP
 	char *file; // fichier contenant des IPs
-	char	*ports;
-	int		*ports_list;
-	int		ports_count;
+	char		*ports;
+	int			*ports_list;
+	int			ports_count;
 	int speedup;     // nombre de threads max
 	int scans;       // bitmask
 	char *scan_type; // type de scan
 	int show_help;   // flag pour afficher l'aide
-}			t_config;
+}				t_config;
 
-// parser.c
-int			parse_args(t_config *config, int argc, char **argv);
+typedef struct s_thread_arg
+{
+	t_config	*config;
+	int			port;
+}				t_thread_arg;
+
+// Main
+int				parse_args(t_config *config, int argc, char **argv);
+void			scan_port(t_config *config, int port);
 
 // Utils
-void		print_help(void);
-void		print_config(const t_config *config);
-void		free_args(char **args);
-void		free_config(t_config *config);
+void			print_help(void);
+void			print_config(const t_config *config);
+void			free_args(char **args);
+void			free_config(t_config *config);
 
 #endif
