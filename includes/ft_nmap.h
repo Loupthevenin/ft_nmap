@@ -32,35 +32,28 @@ typedef enum e_scan_type
 	SCAN_XMAS = 1 << 4,     // 010000
 	SCAN_UDP = 1 << 5,      // 100000
 	SCAN_ALL = (1 << 6) - 1 // 111111
-}		t_scan_type;
+}			t_scan_type;
 
 typedef struct s_config
 {
-	char *ip;    // adresse IP
-	char *file;  // fichier contenant des IPs
-	char *ports; // plage ou liste de ports
-	int speedup; // nombre de threads max
-	// int scans;     // bitmask
+	char *ip;   // adresse IP
+	char *file; // fichier contenant des IPs
+	char	*ports;
+	int		*ports_list;
+	int		ports_count;
+	int speedup;     // nombre de threads max
+	int scans;       // bitmask
 	char *scan_type; // type de scan
 	int show_help;   // flag pour afficher l'aide
-}		t_config;
+}			t_config;
 
 // parser.c
-int		validate_config(t_config *config);
-int		is_valid_port(const char *port);
-int		is_valid_argument(const char *arg);
-int		is_valid_ip(const char *ip);
-int		is_valid_scan_type(const char *type);
-int		is_valid_speedup(int speedup);
-int		file_exists(const char *filename);
-int		validate_ports(const char *ports_str);
-void	init_config(t_config *config);
-void	free_config(t_config *config);
-int		parse_args(t_config *config, int argc, char **argv);
+int			parse_args(t_config *config, int argc, char **argv);
 
 // Utils
-void	print_help(void);
-void	print_config(const t_config *config);
-void	free_args(char **args);
+void		print_help(void);
+void		print_config(const t_config *config);
+void		free_args(char **args);
+void		free_config(t_config *config);
 
 #endif

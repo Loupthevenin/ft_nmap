@@ -35,3 +35,18 @@ void	free_args(char **args)
 	}
 	free(args);
 }
+
+// Free
+void	free_config(t_config *config)
+{
+	if (config->ports)
+		free(config->ports);
+	if (config->ports_list)
+		free(config->ports_list);
+	if (config->ip)
+		free(config->ip);
+	if (config->file)
+		free(config->file);
+	if (config->scan_type)
+		free(config->scan_type);
+}

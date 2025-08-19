@@ -14,45 +14,45 @@ COUNT_OK=0
 COUNT_FAIL=0
 
 assert_diff() {
-	local output="$1"
-	local expected_file="$2"
-	local label="$3"
-	local expected_exit="$4"
-	local actual_exit="$5"
+	local output="$1"        # Contenu réel produit par le programme
+	local expected_file="$2" # Fichier contenant la sortie attendue
+	local label="$3"         # Label du test (ex: "./ft_nmap --help")
+	local expected_exit="$4" # Code de sortie attendu
+	local actual_exit="$5"   # Code de sortie réel
 
-	# 1) Vérif du contenu (diff)
-	local diff_ok=true
-	diff -u "$expected_file" <(printf "%s" "$output") >diff_result.txt
-	if [ $? -ne 0 ]; then
-		diff_ok=false
+	# 1) Vérif du contenu avec diff
+	local diff_ok=0
+	diff -q "$expected_file" "$output" >/dev/null
+	local diff_exit_code=$?
+	if [ "$diff_exit_code" -eq 0 ]; then
+		diff_ok=1
 	fi
 
 	# 2) Vérif du code de sortie
-	local exit_ok=true
-	if [ -n "$expected_exit" ]; then
-		if [ "$actual_exit" -ne "$expected_exit" ]; then
-			exit_ok=false
-		fi
+	local exit_ok=0
+	if [ -n "$expected_exit" ] && [ "$actual_exit" -eq "$expected_exit" ]; then
+		exit_ok=1
 	fi
 
 	# 3) Résultat combiné
-	if $diff_ok && $exit_ok; then
+	if [ $diff_ok -eq 1 ] && [ $exit_ok -eq 1 ]; then
 		echo -e "${GREEN}✅ $label OK${RESET}"
 		((COUNT_OK++))
-		rm -f diff_result.txt
 		return 0
 	else
 		echo -e "${RED}❌ $label FAIL${RESET}"
 		((COUNT_FAIL++))
-		if ! $diff_ok; then
+
+		if [ $diff_ok -eq 0 ]; then
 			echo -e "${YELLOW}----- Diff -----${RESET}"
-			cat diff_result.txt
+			diff --color "$expected_file" "$output"
 			echo -e "${YELLOW}----------------${RESET}"
 		fi
-		if ! $exit_ok; then
+
+		if [ $exit_ok -eq 0 ]; then
 			echo -e "${RED}⚠ Exit code mismatch (got ${actual_exit}, expected ${expected_exit})${RESET}"
 		fi
-		rm -f diff_result.txt
+
 		return 1
 	fi
 }
@@ -116,16 +116,18 @@ declare -a COMMANDS_KO=(
 
 for cmd in "${COMMANDS_HELP_OK[@]}"; do
 	echo "▶️ Running: $cmd"
-	OUTPUT=$($cmd)
+	$cmd >output
 	RET=$?
-	assert_diff "$OUTPUT" "$EXPECTED_HELP" "HELP format ($cmd)" 0 "$RET"
+	assert_diff output "$EXPECTED_HELP" "HELP format ($cmd)" 0 "$RET"
 done
 
 for cmd in "${COMMANDS_KO[@]}"; do
 	echo "▶️ $cmd"
-	OUTPUT=$(eval "$cmd")
+	$cmd >output 2>/dev/null
 	RET=$?
-	assert_diff "$OUTPUT" "$EXPECTED_HELP" "Usage shown for missing --ip/file ($cmd)" 1 "$RET"
+	assert_diff output "$EXPECTED_HELP" "Usage shown for missing --ip/file ($cmd)" 1 "$RET"
 done
+
+rm -f output
 
 print_summary
