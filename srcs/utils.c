@@ -21,21 +21,6 @@ void	print_config(const t_config *config)
 	printf("  Scan Type: %s\n", config->scan_type ? config->scan_type : "None");
 }
 
-void	free_args(char **args)
-{
-	int	i;
-
-	i = 0;
-	if (!args)
-		return ;
-	while (args[i])
-	{
-		free(args[i]);
-		i++;
-	}
-	free(args);
-}
-
 // Free
 void	free_config(t_config *config)
 {

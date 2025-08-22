@@ -1,0 +1,5 @@
+TODO
+
+- rajouter print_help apres chaque erreur
+- parser le file
+- attendre les fonctions scan + rajouter la structure finale pour print les resultats
