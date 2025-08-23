@@ -19,40 +19,58 @@ static void	init_result(t_result *result, int port)
 		result->scan_results[i] = NULL;
 }
 
+static void	allocate_results_for_hosts(t_config *config)
+{
+	t_host	*host;
+
+	for (int h = 0; h < config->hosts_count; h++)
+	{
+		host = &config->hosts[h];
+		host->result = malloc(sizeof(t_result) * host->ports_count);
+		if (!host->result)
+			continue ;
+		for (int k = 0; k < host->ports_count; k++)
+			init_result(&host->result[k], host->ports_list[k]);
+		host->pcap_handle = pcap_open_handle(config->iface, host->ip);
+		if (!host->pcap_handle)
+			fprintf(stderr, "[-] Failed to open pcap handle for host %s\n",
+					host->ip);
+	}
+}
+
 static void	run_scan(t_config *config)
 {
 	int				i;
 	pthread_t		*threads;
 	int				active_threads;
 	t_thread_arg	*targ;
-	t_result		*results;
+	t_host			*host;
 
-	i = 0;
 	active_threads = 0;
 	threads = malloc(sizeof(pthread_t) * config->speedup);
 	if (!threads)
 		return ;
-	results = malloc(sizeof(t_result) * config->ports_count);
-	if (!results)
-		return ;
-	for (int k = 0; k < config->ports_count; k++)
-		init_result(&results[k], config->ports_list[k]);
-	// TODO: prendre en compte si plage d'ip ?
-	while (i < config->ports_count)
+	for (int h = 0; h < config->hosts_count; h++)
 	{
-		targ = malloc(sizeof(t_thread_arg));
-		targ->config = config;
-		targ->port = config->ports_list[i];
-		targ->result = &results[i];
-		pthread_create(&threads[active_threads], NULL, thread_scan, targ);
-		active_threads++;
-		if (active_threads == config->speedup)
+		host = &config->hosts[h];
+		i = 0;
+		while (i < host->ports_count)
 		{
-			for (int j = 0; j < active_threads; j++)
-				pthread_join(threads[j], NULL);
-			active_threads = 0;
+			targ = malloc(sizeof(t_thread_arg));
+			targ->config = config;
+			targ->host = host;
+			targ->port = host->ports_list[i];
+			targ->result = &host->result[i];
+			pthread_create(&threads[active_threads], NULL, thread_scan, targ);
+			active_threads++;
+			if (active_threads == config->speedup)
+			{
+				for (int j = 0; j < active_threads; j++)
+					pthread_join(threads[j], NULL);
+				active_threads = 0;
+			}
+			i++;
 		}
-		i++;
 	}
 	for (int j = 0; j < active_threads; j++)
 		pthread_join(threads[j], NULL);
@@ -74,18 +92,11 @@ int	main(int argc, char **argv)
 		free_config(&config);
 		return (0);
 	}
-	config.pcap_handle = pcap_open_handle(config.iface, config.ip);
-	if (!config.pcap_handle)
-	{
-		fprintf(stderr, "[-] Failed to open pcap handle on %s\n", config.iface);
-		free_config(&config);
-		return (1);
-	}
 	print_config(&config);
+	allocate_results_for_hosts(&config);
 	printf("\nStarting ft_nmap scan...\n");
 	run_scan(&config);
-	if (config.pcap_handle)
-		pcap_close(config.pcap_handle);
+	print_results(&config);
 	free_config(&config);
 	return (0);
 }

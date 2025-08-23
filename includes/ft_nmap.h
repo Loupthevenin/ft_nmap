@@ -12,6 +12,7 @@
 # include <netinet/ip_icmp.h>
 # include <netinet/tcp.h>
 # include <netinet/udp.h>
+# include <pcap.h>
 # include <pcap/pcap.h>
 # include <pthread.h>
 # include <signal.h>
@@ -24,7 +25,6 @@
 # include <sys/types.h>
 # include <sys/wait.h>
 # include <unistd.h>
-// # include <pcap.h>
 
 typedef enum e_scan_type
 {
@@ -63,6 +63,7 @@ typedef struct s_host
 	int *ports_list; // liste de ports pour ce host
 	int			ports_count;
 	t_result *result; //  résultat liés aux ports
+	pcap_t		*pcap_handle;
 }				t_host;
 
 typedef struct s_config
@@ -113,6 +114,7 @@ int				send_udp(const char *dst_ip, int dport);
 // Utils
 void			print_help(void);
 void			print_config(const t_config *config);
+void			print_results(t_config *config);
 void			free_config(t_config *config);
 
 #endif
