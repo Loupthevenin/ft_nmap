@@ -32,7 +32,7 @@ all: $(NAME)
 
 $(NAME): $(OBJS)
 	@printf "$(_END)\nCompiled source files\n"
-	@$(CC) $(CFLAGS) $(INCLUDE) $(OBJS) -o $@
+	@$(CC) $(CFLAGS) $(INCLUDE) $(OBJS) -o $@ $(LDFLAGS)
 	@printf "$(_GREEN)Finish compiling $(NAME)!\n"
 	@printf "Try \"./$(NAME)\" to use$(_END)\n"
 

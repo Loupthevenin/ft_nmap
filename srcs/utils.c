@@ -35,3 +35,17 @@ void	free_config(t_config *config)
 	if (config->scan_type)
 		free(config->scan_type);
 }
+
+void	free_results(t_result *results, int count)
+{
+	if (!results)
+		return ;
+	for (int i = 0; i < count; i++)
+	{
+		free(results[i].service);
+		free(results[i].conclusion);
+		for (int j = 0; j < 6; j++)
+			free(results[i].scan_results[j]);
+	}
+	free(results);
+}

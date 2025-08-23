@@ -1,56 +1,79 @@
 #include "../includes/ft_nmap.h"
 
-static void	syn_scan(t_config *config, int port)
+static const char	*interpret_syn(const char *state)
 {
-	(void)config;
-	(void)port;
+	return (state);
 }
 
-static void	fin_scan(t_config *config, int port)
+static const char	*interpret_fin(const char *state)
 {
-	(void)config;
-	(void)port;
+	if (strcmp(state, "Closed") == 0)
+		return ("Closed");
+	return ("Open|Filtered");
 }
 
-static void	xmas_scan(t_config *config, int port)
+static const char	*interpret_null(const char *state)
 {
-	(void)config;
-	(void)port;
+	if (strcmp(state, "Closed") == 0)
+		return ("Closed");
+	return ("Open|Filtered");
 }
 
-static void	null_scan(t_config *config, int port)
+static const char	*interpret_xmas(const char *state)
 {
-	(void)config;
-	(void)port;
+	if (strcmp(state, "Closed") == 0)
+		return ("Closed");
+	return ("Open|Filtered");
 }
 
-static void	ack_scan(t_config *config, int port)
+static const char	*interpret_ack(const char *state)
 {
-	(void)config;
-	(void)port;
+	if (strcmp(state, "Closed") == 0 || strcmp(state, "Open") == 0)
+		return ("Unfiltered");
+	return ("Filtered");
 }
 
-static void	udp_scan(t_config *config, int port)
+static void	tcp_scan(t_config *config, int port, t_result *res, int scan_index,
+		int flags, const char *(*interpret)(const char *))
 {
-	(void)config;
-	(void)port;
+	char	state[32];
+
+	send_tcp(config->ip, port, flags);
+	if (pcap_wait_response(config->pcap_handle, port, IPPROTO_TCP, state,
+			sizeof(state)))
+		res->scan_results[scan_index] = strdup(interpret(state));
+	else
+		res->scan_results[scan_index] = strdup(interpret("Filtered"));
 }
 
-void	scan_port(t_config *config, int port)
+static void	udp_scan(t_config *config, int port, t_result *res)
+{
+	char	state[32];
+
+	send_udp(config->ip, port);
+	if (pcap_wait_response(config->pcap_handle, port, IPPROTO_UDP, state,
+			sizeof(state)))
+		res->scan_results[INDEX_UDP] = strdup(state);
+	else
+		res->scan_results[INDEX_UDP] = strdup("Open|Filtered");
+}
+
+void	scan_port(t_config *config, int port, t_result *result)
 {
 	int	scan_type;
 
 	scan_type = config->scans;
 	if (scan_type & SCAN_SYN)
-		syn_scan(config, port);
+		tcp_scan(config, port, result, INDEX_SYN, TH_SYN, interpret_syn);
 	if (scan_type & SCAN_FIN)
-		fin_scan(config, port);
+		tcp_scan(config, port, result, INDEX_FIN, TH_FIN, interpret_fin);
 	if (scan_type & SCAN_XMAS)
-		xmas_scan(config, port);
+		tcp_scan(config, port, result, INDEX_XMAS, TH_FIN | TH_PUSH | TH_URG,
+				interpret_xmas);
 	if (scan_type & SCAN_NULL)
-		null_scan(config, port);
+		tcp_scan(config, port, result, INDEX_NULL, 0, interpret_null);
 	if (scan_type & SCAN_ACK)
-		ack_scan(config, port);
+		tcp_scan(config, port, result, INDEX_ACK, TH_ACK, interpret_ack);
 	if (scan_type & SCAN_UDP)
-		udp_scan(config, port);
+		udp_scan(config, port, result);
 }
