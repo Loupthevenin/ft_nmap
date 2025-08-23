@@ -35,7 +35,7 @@ typedef enum e_scan_type
 	SCAN_XMAS = 1 << 4,     // 010000
 	SCAN_UDP = 1 << 5,      // 100000
 	SCAN_ALL = (1 << 6) - 1 // 111111
-}				t_scan_type;
+}					t_scan_type;
 
 typedef enum e_scan_index
 {
@@ -46,25 +46,25 @@ typedef enum e_scan_index
 	INDEX_XMAS,
 	INDEX_UDP,
 	INDEX_COUNT
-}				t_scan_index;
+}					t_scan_index;
 
 typedef struct s_result
 {
-	int			port;
-	char		*service;
-	char		*scan_results[INDEX_COUNT];
-	char		*conclusion;
-}				t_result;
+	int				port;
+	char			*service;
+	char			*scan_results[INDEX_COUNT];
+	char			*conclusion;
+}					t_result;
 
 typedef struct s_host
 {
 	char *hostname;  // nom donné (ex: "scanme.nmap.org")
 	char *ip;        // IP résolue
 	int *ports_list; // liste de ports pour ce host
-	int			ports_count;
+	int				ports_count;
 	t_result *result; //  résultat liés aux ports
-	pcap_t		*pcap_handle;
-}				t_host;
+	pcap_t			*pcap_handle;
+}					t_host;
 
 typedef struct s_config
 {
@@ -87,34 +87,52 @@ typedef struct s_config
 	char *scan_type; // string user input des scans
 	char *iface;     // interface réseau
 	int show_help;   // flag pour afficher l'aide
-}				t_config;
+}					t_config;
 
 typedef struct s_thread_arg
 {
-	t_config	*config;
-	t_host		*host;
-	int			port;
-	t_result	*result;
-}				t_thread_arg;
+	t_config		*config;
+	t_host			*host;
+	int				port;
+	t_result		*result;
+}					t_thread_arg;
+
+typedef struct s_pseudo_tcp
+{
+	unsigned int	src_addr;
+	unsigned int	dst_addr;
+	unsigned char	placeholder;
+	unsigned char	proto;
+	unsigned short	len;
+	struct tcphdr	tcp;
+}					t_pseudo_tcp;
 
 // Main
-int				parse_args(t_config *config, int argc, char **argv);
-int				resolve_hostname(const char *hostname, char **ip);
-char			**parse_ips_from_file(const char *filename, int *count);
-void			scan_port(t_config *config, t_host *host, int port,
-					t_result *result);
+int					parse_args(t_config *config, int argc, char **argv);
+int					resolve_hostname(const char *hostname, char **ip);
+char				**parse_ips_from_file(const char *filename, int *count);
+void				scan_port(t_config *config, t_host *host, int port,
+						t_result *result);
+
+// Packets
+int					create_tcp_packet(char *buff, const char *src_ip,
+						const char *dst_ip, int sport, int dport,
+						int scan_type);
+int					create_udp_packet(char *buff, const char *src_ip,
+						const char *dst_ip, int sport, int dport);
 
 // Pcap
-pcap_t			*pcap_open_handle(const char *iface, const char *ip_filter);
-int				pcap_wait_response(pcap_t *handle, int dport, int proto,
-					char *out_state, size_t out_len);
-int				send_tcp(const char *dst_ip, int dport, int flags);
-int				send_udp(const char *dst_ip, int dport);
+pcap_t				*pcap_open_handle(const char *iface, const char *ip_filter);
+int					pcap_wait_response(pcap_t *handle, int dport, int proto,
+						char *out_state, size_t out_len);
+int					send_tcp(const char *dst_ip, int dport, int scan_type);
+int					send_udp(const char *dst_ip, int dport);
 
 // Utils
-void			print_help(void);
-void			print_config(const t_config *config);
-void			print_results(t_config *config);
-void			free_config(t_config *config);
+unsigned short		cksum(unsigned short *buf, int n);
+void				print_help(void);
+void				print_config(const t_config *config);
+void				print_results(t_config *config);
+void				free_config(t_config *config);
 
 #endif

@@ -1,5 +1,17 @@
 #include "../includes/ft_nmap.h"
 
+unsigned short	cksum(unsigned short *buf, int n)
+{
+	unsigned long	sum;
+
+	sum = 0;
+	for (; n > 0; n--)
+		sum += *buf++;
+	sum = (sum >> 16) + (sum & 0xFFFF);
+	sum += (sum >> 16);
+	return (unsigned short)(~sum);
+}
+
 void	print_help(void)
 {
 	printf("Help Screen\n");

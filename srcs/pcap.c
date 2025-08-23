@@ -15,7 +15,7 @@ pcap_t	*pcap_open_handle(const char *iface, const char *ip_filter)
 	}
 	snprintf(filter_exp, sizeof(filter_exp), "(tcp or udp or icmp) and host %s",
 			ip_filter);
-	if (pcap_compile(handle, &fp, filter_exp, 0, PCAP_NETMASK_UNKNOWN) == -1
+	if (pcap_compile(handle, &fp, "tcp or udp", 0, PCAP_NETMASK_UNKNOWN) == -1
 		|| pcap_setfilter(handle, &fp) == -1)
 	{
 		fprintf(stderr, "pcap filter error: %s\n", pcap_geterr(handle));
@@ -38,7 +38,7 @@ int	pcap_wait_response(pcap_t *handle, int dport, int proto, char *out_state,
 	int					max_attempts;
 
 	attempts = 0;
-	max_attempts = 5;
+	max_attempts = 100;
 	while (attempts < max_attempts)
 	{
 		res = pcap_next_ex(handle, &header, &packet);
@@ -83,13 +83,22 @@ int	get_local_ip(char *buffer, size_t buflen)
 	struct sockaddr_in	serv;
 	struct sockaddr_in	name;
 	socklen_t			namelen;
+	int					one;
 
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sock < 0)
 		return (-1);
+	one = 1;
+	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0)
+	{
+		perror("setsockopt");
+		close(sock);
+		return (-1);
+	}
 	memset(&serv, 0, sizeof(serv));
 	serv.sin_family = AF_INET;
-	serv.sin_addr.s_addr = inet_addr("8.8.8.8"); // n’importe quelle IP externe
+	serv.sin_addr.s_addr = inet_addr("8.8.8.8");
+	// n’importe quelle IP externe
 	serv.sin_port = htons(53);
 	if (connect(sock, (struct sockaddr *)&serv, sizeof(serv)) < 0)
 	{
@@ -107,47 +116,34 @@ int	get_local_ip(char *buffer, size_t buflen)
 	return (0);
 }
 
-int	send_tcp(const char *dst_ip, int dport, int flags)
+int	send_tcp(const char *dst_ip, int dport, int scan_type)
 {
-	int					sock;
 	char				packet[4096];
-	struct ip			*iph;
-	struct tcphdr		*tcph;
 	struct sockaddr_in	dest;
 	char				src_ip[INET_ADDRSTRLEN];
+	ssize_t				packet_size;
 
-	memset(packet, 0, sizeof(packet));
-	iph = (struct ip *)packet;
-	tcph = (struct tcphdr *)(packet + sizeof(struct ip));
-	// 🔹 récupérer l'IP locale (src_ip)
+	int sock, one;
+	int sport = 54321; // port source fixe pour la capture
 	if (get_local_ip(src_ip, sizeof(src_ip)) < 0)
 		return (-1);
-	// Raw socket
-	if ((sock = socket(AF_INET, SOCK_RAW, IPPROTO_TCP)) < 0)
+	sock = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
+	if (sock < 0)
 		return (-1);
-	// Build IP header
-	iph->ip_hl = 5;
-	iph->ip_v = 4;
-	iph->ip_ttl = 64;
-	iph->ip_p = IPPROTO_TCP;
-	iph->ip_len = htons(sizeof(struct ip) + sizeof(struct tcphdr));
-	iph->ip_src.s_addr = inet_addr(src_ip);
-	iph->ip_dst.s_addr = inet_addr(dst_ip);
-	// Build TCP header
-	tcph->th_sport = htons(12345 + (rand() % 1000));
-	// port source pseudo-aléatoire
-	tcph->th_dport = htons(dport);
-	tcph->th_seq = htonl(rand());
-	tcph->th_off = 5;
-	tcph->th_flags = flags;
-	tcph->th_win = htons(65535);
-	// Destination
+	one = 1;
+	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0)
+	{
+		perror("setsockopt");
+		close(sock);
+		return (-1);
+	}
+	packet_size = create_tcp_packet(packet, src_ip, dst_ip, sport, dport,
+			scan_type);
 	dest.sin_family = AF_INET;
-	dest.sin_port = tcph->th_dport;
-	dest.sin_addr.s_addr = iph->ip_dst.s_addr;
-	// Send packet
-	if (sendto(sock, packet, sizeof(struct ip) + sizeof(struct tcphdr), 0,
-			(struct sockaddr *)&dest, sizeof(dest)) < 0)
+	dest.sin_port = htons(dport);
+	dest.sin_addr.s_addr = inet_addr(dst_ip);
+	if (sendto(sock, packet, packet_size, 0, (struct sockaddr *)&dest,
+			sizeof(dest)) < 0)
 	{
 		close(sock);
 		return (-1);
@@ -160,37 +156,22 @@ int	send_udp(const char *dst_ip, int dport)
 {
 	int					sock;
 	char				packet[4096];
-	struct ip			*iph;
-	struct udphdr		*udph;
 	struct sockaddr_in	dest;
 	char				src_ip[INET_ADDRSTRLEN];
+	ssize_t				packet_size;
 
-	memset(packet, 0, sizeof(packet));
-	iph = (struct ip *)packet;
-	udph = (struct udphdr *)(packet + sizeof(struct ip));
-	// 🔹 récupérer l'IP locale (src_ip)
+	int sport = 54321; // port source fixe pour capture
 	if (get_local_ip(src_ip, sizeof(src_ip)) < 0)
 		return (-1);
-	if ((sock = socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) < 0)
+	sock = socket(AF_INET, SOCK_RAW, IPPROTO_UDP);
+	if (sock < 0)
 		return (-1);
-	// Build IP header
-	iph->ip_hl = 5;
-	iph->ip_v = 4;
-	iph->ip_ttl = 64;
-	iph->ip_p = IPPROTO_UDP;
-	iph->ip_len = htons(sizeof(struct ip) + sizeof(struct udphdr));
-	iph->ip_src.s_addr = inet_addr(src_ip);
-	iph->ip_dst.s_addr = inet_addr(dst_ip);
-	// Build UDP header
-	udph->uh_sport = htons(12345 + (rand() % 1000));
-	udph->uh_dport = htons(dport);
-	udph->uh_ulen = htons(sizeof(struct udphdr));
-	// Destination
+	packet_size = create_udp_packet(packet, src_ip, dst_ip, sport, dport);
 	dest.sin_family = AF_INET;
-	dest.sin_port = udph->uh_dport;
-	dest.sin_addr.s_addr = iph->ip_dst.s_addr;
-	if (sendto(sock, packet, sizeof(struct ip) + sizeof(struct udphdr), 0,
-			(struct sockaddr *)&dest, sizeof(dest)) < 0)
+	dest.sin_port = htons(dport);
+	dest.sin_addr.s_addr = inet_addr(dst_ip);
+	if (sendto(sock, packet, packet_size, 0, (struct sockaddr *)&dest,
+			sizeof(dest)) < 0)
 	{
 		close(sock);
 		return (-1);
