@@ -36,26 +36,69 @@ static const char	*interpret_ack(const char *state)
 static void	tcp_scan(t_host *host, int port, t_result *res, int scan_index,
 		int flags, const char *(*interpret)(const char *))
 {
-	char	state[32];
+	char				state[32];
+	char				errbuf[PCAP_ERRBUF_SIZE];
+	pcap_t				*handle;
+	struct bpf_program	fp;
+	char				filter[1024];
 
-	send_tcp(host->ip, port, flags);
-	if (pcap_wait_response(host->pcap_handle, port, IPPROTO_TCP, state,
-			sizeof(state)))
+	handle = pcap_open_live(DEFAULT_IFACE, BUFSIZ, 1, 5000, errbuf);
+	if (!handle)
+	{
+		res->scan_results[scan_index] = strdup(interpret("Error"));
+		return ;
+	}
+	snprintf(filter, sizeof(filter), "tcp and src host %s and dst port 54321",
+			host->ip);
+	if (pcap_compile(handle, &fp, filter, 0, PCAP_NETMASK_UNKNOWN) == -1 ||
+		pcap_setfilter(handle, &fp) == -1)
+	{
+		res->scan_results[scan_index] = strdup(interpret("Error"));
+		pcap_close(handle);
+		return ;
+	}
+	pcap_freecode(&fp);
+	send_raw(host->ip, port, IPPROTO_TCP, flags);
+	if (pcap_wait_response(handle, port, IPPROTO_TCP, state, sizeof(state)))
 		res->scan_results[scan_index] = strdup(interpret(state));
 	else
 		res->scan_results[scan_index] = strdup(interpret("Filtered"));
+	pcap_close(handle);
 }
 
 static void	udp_scan(t_host *host, int port, t_result *res)
 {
-	char	state[32];
+	char				state[32];
+	char				errbuf[PCAP_ERRBUF_SIZE];
+	pcap_t				*handle;
+	struct bpf_program	fp;
+	char				filter[1024];
 
-	send_udp(host->ip, port);
-	if (pcap_wait_response(host->pcap_handle, port, IPPROTO_UDP, state,
-			sizeof(state)))
+	handle = pcap_open_live(DEFAULT_IFACE, BUFSIZ, 1, 1000, errbuf);
+	if (!handle)
+	{
+		res->scan_results[INDEX_UDP] = strdup("Error");
+		return ;
+	}
+	// Filtre pcap pour UDP + ICMP port unreachable
+	snprintf(filter, sizeof(filter), "(udp or icmp) and src host"
+										"%s and (src port %d or icmp[0] == 3)",
+				host->ip,
+				54321);
+	if (pcap_compile(handle, &fp, filter, 0, PCAP_NETMASK_UNKNOWN) == -1 ||
+		pcap_setfilter(handle, &fp) == -1)
+	{
+		res->scan_results[INDEX_UDP] = strdup("Error");
+		pcap_close(handle);
+		return ;
+	}
+	pcap_freecode(&fp);
+	send_raw(host->ip, port, IPPROTO_UDP, 0);
+	if (pcap_wait_response(handle, port, IPPROTO_UDP, state, sizeof(state)))
 		res->scan_results[INDEX_UDP] = strdup(state);
 	else
 		res->scan_results[INDEX_UDP] = strdup("Open|Filtered");
+	pcap_close(handle);
 }
 
 void	scan_port(t_config *config, t_host *host, int port, t_result *result)

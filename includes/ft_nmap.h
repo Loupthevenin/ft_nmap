@@ -26,6 +26,8 @@
 # include <sys/wait.h>
 # include <unistd.h>
 
+# define DEFAULT_IFACE "eth0"
+
 typedef enum e_scan_type
 {
 	SCAN_SYN = 1 << 0,      // 000001
@@ -62,8 +64,8 @@ typedef struct s_host
 	char *ip;        // IP résolue
 	int *ports_list; // liste de ports pour ce host
 	int				ports_count;
+	char *iface;      // interface réseau
 	t_result *result; //  résultat liés aux ports
-	pcap_t			*pcap_handle;
 }					t_host;
 
 typedef struct s_config
@@ -85,7 +87,6 @@ typedef struct s_config
 	int speedup;     // threads max
 	int scans;       // bitmask des scans
 	char *scan_type; // string user input des scans
-	char *iface;     // interface réseau
 	int show_help;   // flag pour afficher l'aide
 }					t_config;
 
@@ -122,13 +123,14 @@ int					create_udp_packet(char *buff, const char *src_ip,
 						const char *dst_ip, int sport, int dport);
 
 // Pcap
-pcap_t				*pcap_open_handle(const char *iface, const char *ip_filter);
+pcap_t				*pcap_open_handle(const char *ip_filter);
 int					pcap_wait_response(pcap_t *handle, int dport, int proto,
 						char *out_state, size_t out_len);
-int					send_tcp(const char *dst_ip, int dport, int scan_type);
-int					send_udp(const char *dst_ip, int dport);
+int					send_raw(const char *dst_ip, int dport, int proto,
+						int flags);
 
 // Utils
+int					get_local_ip(char *buffer, size_t buflen);
 unsigned short		cksum(unsigned short *buf, int n);
 void				print_help(void);
 void				print_config(const t_config *config);

@@ -26,13 +26,56 @@ void	print_help(void)
 
 void	print_config(const t_config *config)
 {
-	int	first;
+	int		first;
+	t_host	*host;
 
 	printf("Configuration:\n");
 	printf("  IP Address: %s\n", config->ip ? config->ip : "None");
-	printf("  Ports: %s\n", config->ports);
-	printf("  Speedup: %d\n", config->speedup);
-	printf("  Scan Type: ");
+	if (config->hosts_count > 0)
+	{
+		printf("  Hosts (%d):\n", config->hosts_count);
+		for (int h = 0; h < config->hosts_count; h++)
+		{
+			host = &config->hosts[h];
+			printf("    Hostname: %s, IP: %s, Interface: %s\n",
+					host->hostname ? host->hostname : "N/A",
+					host->ip ? host->ip : "N/A",
+					host->iface ? host->iface : "N/A");
+			printf("      Ports (%d): ", host->ports_count);
+			for (int p = 0; p < host->ports_count; p++)
+			{
+				printf("%d", host->ports_list[p]);
+				if (p < host->ports_count - 1)
+					printf(", ");
+			}
+			printf("\n");
+		}
+	}
+	else if (config->ips_count > 0 && config->ips_list)
+	{
+		printf("  Legacy IPs (%d): ", config->ips_count);
+		for (int i = 0; i < config->ips_count; i++)
+		{
+			printf("%s", config->ips_list[i]);
+			if (i < config->ips_count - 1)
+				printf(", ");
+		}
+		printf("\n");
+	}
+	printf("  Ports (global): %s\n", config->ports ? config->ports : "None");
+	if (config->ports_count > 0 && config->ports_list)
+	{
+		printf("  Ports list: ");
+		for (int i = 0; i < config->ports_count; i++)
+		{
+			printf("%d", config->ports_list[i]);
+			if (i < config->ports_count - 1)
+				printf(", ");
+		}
+		printf("\n");
+	}
+	printf("  Speedup (threads): %d\n", config->speedup);
+	printf("  Scan Types: ");
 	if (config->scans == SCAN_ALL)
 		printf("All\n");
 	else
@@ -82,6 +125,12 @@ void	print_config(const t_config *config)
 		}
 		printf("\n");
 	}
+	if (config->file)
+		printf("  IP File: %s\n", config->file);
+	if (config->show_help)
+		printf("  Show help: Yes\n");
+	else
+		printf("  Show help: No\n");
 }
 
 void	print_results(t_config *config)

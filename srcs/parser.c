@@ -38,7 +38,6 @@ static void	init_config(t_config *config)
 	config->speedup = 1;
 	config->scans = 0;
 	config->scan_type = NULL;
-	config->iface = NULL;
 	config->show_help = 0;
 }
 

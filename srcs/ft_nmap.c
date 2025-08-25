@@ -26,15 +26,20 @@ static void	allocate_results_for_hosts(t_config *config)
 	for (int h = 0; h < config->hosts_count; h++)
 	{
 		host = &config->hosts[h];
+		// Copier les ports globaux dans le host
+		host->ports_count = config->ports_count;
+		host->iface = NULL;
+		host->ports_list = malloc(sizeof(int) * host->ports_count);
+		if (!host->ports_list)
+			continue ;
+		for (int i = 0; i < host->ports_count; i++)
+			host->ports_list[i] = config->ports_list[i];
+		// Allouer et initialiser les résultats
 		host->result = malloc(sizeof(t_result) * host->ports_count);
 		if (!host->result)
 			continue ;
 		for (int k = 0; k < host->ports_count; k++)
 			init_result(&host->result[k], host->ports_list[k]);
-		host->pcap_handle = pcap_open_handle(config->iface, host->ip);
-		if (!host->pcap_handle)
-			fprintf(stderr, "[-] Failed to open pcap handle for host %s\n",
-					host->ip);
 	}
 }
 
