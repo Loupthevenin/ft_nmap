@@ -98,6 +98,14 @@ typedef struct s_thread_arg
 	t_result		*result;
 }					t_thread_arg;
 
+typedef struct s_scan_params
+{
+	int				index;
+	int				flags;
+	int				is_udp;
+	const char		*(*interpret)(const char *state);
+}					t_scan_params;
+
 typedef struct s_pseudo_tcp
 {
 	unsigned int	src_addr;
