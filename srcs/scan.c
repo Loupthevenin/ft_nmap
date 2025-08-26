@@ -35,11 +35,9 @@ static const char	*interpret_ack(const char *state)
 
 static void	scan(t_host *host, int port, t_result *res, t_scan_params params)
 {
-	char				state[32];
 	char				errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t				*handle;
 	struct bpf_program	fp;
-	char				filter[1024];
 
 	handle = pcap_open_live(DEFAULT_IFACE, BUFSIZ, 1, 5000, errbuf);
 	if (!handle)
@@ -47,22 +45,7 @@ static void	scan(t_host *host, int port, t_result *res, t_scan_params params)
 		res->scan_results[params.index] = strdup("Error");
 		return ;
 	}
-	if (!params.is_udp)
-	{
-		// TCP
-		snprintf(filter, sizeof(filter), "tcp and src host "
-											"%s and dst port 54321",
-					host->ip);
-	}
-	else
-	{
-		// UDP
-		snprintf(filter, sizeof(filter), "(udp or icmp) and src host "
-											"%s and (src port 54321 or icmp[0] == 3)",
-					host->ip);
-	}
-	if (pcap_compile(handle, &fp, filter, 0, PCAP_NETMASK_UNKNOWN) == -1 ||
-		pcap_setfilter(handle, &fp) == -1)
+	if (build_filter(handle, host->ip, params.is_udp, &fp) == -1)
 	{
 		res->scan_results[params.index] = strdup("Error");
 		pcap_close(handle);
@@ -73,19 +56,7 @@ static void	scan(t_host *host, int port, t_result *res, t_scan_params params)
 	send_raw(host->ip, port, params.is_udp ? IPPROTO_UDP : IPPROTO_TCP,
 			params.flags);
 	// Attente de la réponse
-	if (pcap_wait_response(handle, port,
-			params.is_udp ? IPPROTO_UDP : IPPROTO_TCP, state, sizeof(state)))
-	{
-		if (!params.is_udp && params.interpret)
-			res->scan_results[params.index] = strdup(params.interpret(state));
-		else
-			res->scan_results[params.index] = strdup(state);
-	}
-	else
-	{
-		res->scan_results[params.index] =
-			strdup(params.is_udp ? "Open|Filtered" : params.interpret("Filtered"));
-	}
+	res->scan_results[params.index] = wait_and_interpret(handle, port, &params);
 	pcap_close(handle);
 }
 

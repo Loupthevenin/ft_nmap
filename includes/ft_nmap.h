@@ -131,7 +131,10 @@ int					create_udp_packet(char *buff, const char *src_ip,
 						const char *dst_ip, int sport, int dport);
 
 // Pcap
-pcap_t				*pcap_open_handle(const char *ip_filter);
+int					build_filter(pcap_t *handle, const char *ip, int is_udp,
+						struct bpf_program *fp);
+char				*wait_and_interpret(pcap_t *handle, int port,
+						t_scan_params *params);
 int					pcap_wait_response(pcap_t *handle, int dport, int proto,
 						char *out_state, size_t out_len);
 int					send_raw(const char *dst_ip, int dport, int proto,

@@ -1,28 +1,40 @@
 #include "../includes/ft_nmap.h"
 
-pcap_t	*pcap_open_handle(const char *ip_filter)
+int	build_filter(pcap_t *handle, const char *ip, int is_udp,
+		struct bpf_program *fp)
 {
-	char				errbuf[PCAP_ERRBUF_SIZE];
-	char				filter_exp[128];
-	pcap_t				*handle;
-	struct bpf_program	fp;
+	char	filter[1024];
 
-	handle = pcap_open_live(DEFAULT_IFACE, BUFSIZ, 1, 1000, errbuf);
-	if (!handle)
+	if (!is_udp)
+		// TCP
+		snprintf(filter, sizeof(filter), "tcp and src host "
+											"%s and dst port 54321",
+					ip);
+	else
+		// UDP
+		snprintf(filter, sizeof(filter), "(udp or icmp) and src host "
+											"%s and (src port 54321 or icmp[0] == 3)",
+					ip);
+	if (pcap_compile(handle, fp, filter, 0, PCAP_NETMASK_UNKNOWN) == -1 ||
+		pcap_setfilter(handle, fp) == -1)
+		return (-1);
+	return (0);
+}
+
+char	*wait_and_interpret(pcap_t *handle, int port, t_scan_params *params)
+{
+	char	state[32];
+
+	if (pcap_wait_response(handle, port,
+			params->is_udp ? IPPROTO_UDP : IPPROTO_TCP, state, sizeof(state)))
 	{
-		fprintf(stderr, "pcap_open_live error: %s\n", errbuf);
-		return (NULL);
+		if (!params->is_udp && params->interpret)
+			return (strdup(params->interpret(state)));
+		else
+			return (strdup(state));
 	}
-	snprintf(filter_exp, sizeof(filter_exp), "(tcp or udp or icmp) and host %s",
-			ip_filter);
-	if (pcap_compile(handle, &fp, filter_exp, 0, PCAP_NETMASK_UNKNOWN) == -1
-		|| pcap_setfilter(handle, &fp) == -1)
-	{
-		fprintf(stderr, "pcap filter error: %s\n", pcap_geterr(handle));
-		pcap_close(handle);
-		return (NULL);
-	}
-	return (handle);
+	else
+		return (strdup(params->is_udp ? "Open|Filtered" : params->interpret("Filtered")));
 }
 
 int	pcap_wait_response(pcap_t *handle, int dport, int proto, char *out_state,
@@ -163,7 +175,6 @@ int	send_raw(const char *dst_ip, int dport, int proto, int flags)
 		perror("socket");
 		return (-1);
 	}
-	// Très important : dire au noyau qu’on fournit l’IP header
 	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0)
 	{
 		perror("setsockopt IP_HDRINCL");
