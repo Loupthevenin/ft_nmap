@@ -7,6 +7,7 @@ static int	create_ip_packet(char *buff, const char *src_ip, const char *dst_ip,
 
 	iph = (struct ip *)buff;
 	memset(buff, 0, sizeof(struct ip) + payload_len);
+	memset(iph, 0, sizeof(struct ip));
 	iph->ip_hl = 5;
 	iph->ip_v = 4;
 	iph->ip_ttl = 64;
@@ -14,6 +15,10 @@ static int	create_ip_packet(char *buff, const char *src_ip, const char *dst_ip,
 	iph->ip_len = htons(sizeof(struct ip) + payload_len);
 	iph->ip_src.s_addr = inet_addr(src_ip);
 	iph->ip_dst.s_addr = inet_addr(dst_ip);
+	// Checksum
+	iph->ip_id = htons(rand() % 65535);
+	iph->ip_off = 0;
+	iph->ip_sum = 0; // mettre à 0 avant le calcul
 	iph->ip_sum = cksum((unsigned short *)iph, sizeof(struct ip) / 2);
 	return (sizeof(struct ip));
 }
@@ -30,19 +35,21 @@ int	create_tcp_packet(char *buff, const char *src_ip, const char *dst_ip,
 	ip_size = create_ip_packet(buff, src_ip, dst_ip, IPPROTO_TCP,
 			sizeof(struct tcphdr));
 	tcph = (struct tcphdr *)(buff + ip_size);
+	memset(tcph, 0, sizeof(struct tcphdr));
 	// TCP header
 	tcph->source = htons(sport);
 	tcph->dest = htons(dport);
 	tcph->seq = htonl(rand());
 	tcph->ack_seq = 0;
 	tcph->doff = sizeof(struct tcphdr) / 4;
+	tcph->window = htons(14600);
+	// Flags
 	tcph->fin = (scan_type == SCAN_FIN || scan_type == SCAN_XMAS);
 	tcph->syn = (scan_type == SCAN_SYN);
 	tcph->rst = 0;
 	tcph->psh = (scan_type == SCAN_XMAS);
 	tcph->ack = (scan_type == SCAN_ACK);
 	tcph->urg = (scan_type == SCAN_XMAS);
-	tcph->window = htons(14600);
 	tcph->urg_ptr = 0;
 	tcph->check = 0;
 	// pseudo-header

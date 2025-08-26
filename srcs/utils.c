@@ -12,6 +12,37 @@ unsigned short	cksum(unsigned short *buf, int n)
 	return (unsigned short)(~sum);
 }
 
+int	get_local_ip(char *buffer, size_t buflen)
+{
+	int					sock;
+	struct sockaddr_in	serv;
+	struct sockaddr_in	name;
+	socklen_t			namelen;
+
+	sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock < 0)
+		return (-1);
+	memset(&serv, 0, sizeof(serv));
+	serv.sin_family = AF_INET;
+	serv.sin_addr.s_addr = inet_addr("8.8.8.8");
+	// n’importe quelle IP externe
+	serv.sin_port = htons(53);
+	if (connect(sock, (struct sockaddr *)&serv, sizeof(serv)) < 0)
+	{
+		close(sock);
+		return (-1);
+	}
+	namelen = sizeof(name);
+	if (getsockname(sock, (struct sockaddr *)&name, &namelen) < 0)
+	{
+		close(sock);
+		return (-1);
+	}
+	inet_ntop(AF_INET, &name.sin_addr, buffer, buflen);
+	close(sock);
+	return (0);
+}
+
 void	print_help(void)
 {
 	printf("Help Screen\n");

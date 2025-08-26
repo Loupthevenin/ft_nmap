@@ -38,14 +38,20 @@ static void	scan(t_host *host, int port, t_result *res, t_scan_params params)
 	char				errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t				*handle;
 	struct bpf_program	fp;
+	char				local_ip[INET_ADDRSTRLEN];
 
-	handle = pcap_open_live(DEFAULT_IFACE, BUFSIZ, 1, 5000, errbuf);
+	if (get_local_ip(local_ip, sizeof(local_ip)) < 0)
+	{
+		res->scan_results[params.index] = strdup("Error (local ip)");
+		return ;
+	}
+	handle = pcap_open_live(DEFAULT_IFACE, BUFSIZ, 1, 1000, errbuf);
 	if (!handle)
 	{
 		res->scan_results[params.index] = strdup("Error");
 		return ;
 	}
-	if (build_filter(handle, host->ip, params.is_udp, &fp) == -1)
+	if (build_filter(handle, host->ip, local_ip, params.is_udp, &fp) == -1)
 	{
 		res->scan_results[params.index] = strdup("Error");
 		pcap_close(handle);
@@ -54,7 +60,7 @@ static void	scan(t_host *host, int port, t_result *res, t_scan_params params)
 	pcap_freecode(&fp);
 	// Envoi du paquet
 	send_raw(host->ip, port, params.is_udp ? IPPROTO_UDP : IPPROTO_TCP,
-			params.flags);
+			params.flags, local_ip);
 	// Attente de la réponse
 	res->scan_results[params.index] = wait_and_interpret(handle, port, &params);
 	pcap_close(handle);

@@ -1,20 +1,23 @@
 #include "../includes/ft_nmap.h"
 
-int	build_filter(pcap_t *handle, const char *ip, int is_udp,
-		struct bpf_program *fp)
+int	build_filter(pcap_t *handle, const char *target_ip, const char *local_ip,
+		int is_udp, struct bpf_program *fp)
 {
 	char	filter[1024];
 
 	if (!is_udp)
 		// TCP
 		snprintf(filter, sizeof(filter), "tcp and src host "
-											"%s and dst port 54321",
-					ip);
+											"%s and dst host "
+											"%s and "
+											"dst port 54321",
+					target_ip,
+					local_ip);
 	else
 		// UDP
 		snprintf(filter, sizeof(filter), "(udp or icmp) and src host "
 											"%s and (src port 54321 or icmp[0] == 3)",
-					ip);
+					target_ip);
 	if (pcap_compile(handle, fp, filter, 0, PCAP_NETMASK_UNKNOWN) == -1 ||
 		pcap_setfilter(handle, fp) == -1)
 		return (-1);
@@ -62,7 +65,10 @@ int	pcap_wait_response(pcap_t *handle, int dport, int proto, char *out_state,
 			return (0);
 		}
 		else if (res == 0)
+		{
+			usleep(1000);
 			continue ;
+		}
 		iph = (struct ip *)(packet + 14);
 		printf("[PCAP] Packet captured proto=%d src=%s dst=%s len=%d\n",
 				iph->ip_p,
@@ -124,50 +130,16 @@ int	pcap_wait_response(pcap_t *handle, int dport, int proto, char *out_state,
 	return (0);
 }
 
-int	get_local_ip(char *buffer, size_t buflen)
-{
-	int					sock;
-	struct sockaddr_in	serv;
-	struct sockaddr_in	name;
-	socklen_t			namelen;
-
-	sock = socket(AF_INET, SOCK_DGRAM, 0);
-	if (sock < 0)
-		return (-1);
-	memset(&serv, 0, sizeof(serv));
-	serv.sin_family = AF_INET;
-	serv.sin_addr.s_addr = inet_addr("8.8.8.8");
-	// n’importe quelle IP externe
-	serv.sin_port = htons(53);
-	if (connect(sock, (struct sockaddr *)&serv, sizeof(serv)) < 0)
-	{
-		close(sock);
-		return (-1);
-	}
-	namelen = sizeof(name);
-	if (getsockname(sock, (struct sockaddr *)&name, &namelen) < 0)
-	{
-		close(sock);
-		return (-1);
-	}
-	inet_ntop(AF_INET, &name.sin_addr, buffer, buflen);
-	close(sock);
-	return (0);
-}
-
-int	send_raw(const char *dst_ip, int dport, int proto, int flags)
+int	send_raw(const char *dst_ip, int dport, int proto, int flags, char *src_ip)
 {
 	char				packet[4096];
 	struct sockaddr_in	dest;
-	char				src_ip[INET_ADDRSTRLEN];
 	ssize_t				packet_size;
 	int					sock;
 	int					one;
 
 	one = 1;
 	int sport = 54321; // port source fixe pour la capture
-	if (get_local_ip(src_ip, sizeof(src_ip)) < 0)
-		return (-1);
 	// On forge TOUT l’IP header → donc IPPROTO_RAW
 	sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
 	if (sock < 0)
