@@ -1,23 +1,14 @@
 #include "../includes/ft_nmap.h"
 
 int	build_filter(pcap_t *handle, const char *target_ip, const char *local_ip,
-		int is_udp, struct bpf_program *fp)
+		struct bpf_program *fp)
 {
 	char	filter[1024];
 
-	if (!is_udp)
-		// TCP
-		snprintf(filter, sizeof(filter), "tcp and src host "
-											"%s and dst host "
-											"%s and "
-											"dst port 54321",
-					target_ip,
-					local_ip);
-	else
-		// UDP
-		snprintf(filter, sizeof(filter), "(udp or icmp) and src host "
-											"%s and (src port 54321 or icmp[0] == 3)",
-					target_ip);
+	snprintf(filter, sizeof(filter), "ip and (tcp or udp or icmp) and src host "
+										"%s and dst host %s",
+				target_ip,
+				local_ip);
 	if (pcap_compile(handle, fp, filter, 0, PCAP_NETMASK_UNKNOWN) == -1 ||
 		pcap_setfilter(handle, fp) == -1)
 		return (-1);
@@ -120,61 +111,13 @@ int	pcap_wait_response(pcap_t *handle, int dport, int proto, char *out_state,
 			}
 		}
 		gettimeofday(&now, NULL);
-		if ((now.tv_sec - start.tv_sec) >= 3)
+		if ((now.tv_sec - start.tv_sec) * 1000 + (now.tv_usec - start.tv_usec)
+			/ 1000 >= 3000)
 		{ // timeout 3 secondes
 			snprintf(out_state, out_len, "Filtered");
 			return (0);
 		}
 	}
 	snprintf(out_state, out_len, "Filtered");
-	return (0);
-}
-
-int	send_raw(const char *dst_ip, int dport, int proto, int flags, char *src_ip)
-{
-	char				packet[4096];
-	struct sockaddr_in	dest;
-	ssize_t				packet_size;
-	int					sock;
-	int					one;
-
-	one = 1;
-	int sport = 54321; // port source fixe pour la capture
-	// On forge TOUT l’IP header → donc IPPROTO_RAW
-	sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-	if (sock < 0)
-	{
-		perror("socket");
-		return (-1);
-	}
-	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0)
-	{
-		perror("setsockopt IP_HDRINCL");
-		close(sock);
-		return (-1);
-	}
-	if (proto == IPPROTO_TCP)
-		packet_size = create_tcp_packet(packet, src_ip, dst_ip, sport, dport,
-				flags);
-	else if (proto == IPPROTO_UDP)
-		packet_size = create_udp_packet(packet, src_ip, dst_ip, sport, dport);
-	else
-	{
-		fprintf(stderr, "Unsupported proto\n");
-		close(sock);
-		return (-1);
-	}
-	memset(&dest, 0, sizeof(dest));
-	dest.sin_family = AF_INET;
-	dest.sin_port = htons(dport);
-	dest.sin_addr.s_addr = inet_addr(dst_ip);
-	if (sendto(sock, packet, packet_size, 0, (struct sockaddr *)&dest,
-			sizeof(dest)) < 0)
-	{
-		perror("sendto");
-		close(sock);
-		return (-1);
-	}
-	close(sock);
 	return (0);
 }

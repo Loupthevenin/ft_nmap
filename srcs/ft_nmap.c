@@ -1,15 +1,5 @@
 #include "../includes/ft_nmap.h"
 
-static void	*thread_scan(void *arg)
-{
-	t_thread_arg	*targ;
-
-	targ = (t_thread_arg *)arg;
-	scan_port(targ->config, targ->host, targ->port, targ->result);
-	free(targ);
-	return (NULL);
-}
-
 static void	init_result(t_result *result, int port)
 {
 	result->port = port;
@@ -28,7 +18,6 @@ static void	allocate_results_for_hosts(t_config *config)
 		host = &config->hosts[h];
 		// Copier les ports globaux dans le host
 		host->ports_count = config->ports_count;
-		host->iface = NULL;
 		host->ports_list = malloc(sizeof(int) * host->ports_count);
 		if (!host->ports_list)
 			continue ;
@@ -43,43 +32,110 @@ static void	allocate_results_for_hosts(t_config *config)
 	}
 }
 
-static void	run_scan(t_config *config)
+static int	set_socket(void)
 {
-	int				i;
+	int	sock;
+	int	one;
+
+	// On forge TOUT l’IP header → donc IPPROTO_RAW
+	one = 1;
+	sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+	if (sock < 0)
+	{
+		perror("socket");
+		return (-1);
+	}
+	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0)
+	{
+		perror("setsockopt IP_HDRINCL");
+		close(sock);
+		return (-1);
+	}
+	return (sock);
+}
+
+static t_listener_arg	*create_listener(pthread_t *listener, t_config *config)
+{
+	t_listener_arg	*larg;
+
+	larg = malloc(sizeof(t_listener_arg));
+	if (!larg)
+		return (NULL);
+	larg->config = config;
+	larg->handle = NULL;
+	pthread_mutex_init(&larg->handle_mutex, NULL);
+	pthread_create(listener, NULL, &thread_listener, larg);
+	return (larg);
+}
+
+static void	create_sender(int sock, t_config *config)
+{
 	pthread_t		*threads;
-	int				active_threads;
 	t_thread_arg	*targ;
 	t_host			*host;
+	int				start;
+	int				end;
+	int				ports_per_thread;
+	int				active_threads;
 
-	active_threads = 0;
 	threads = malloc(sizeof(pthread_t) * config->speedup);
 	if (!threads)
 		return ;
 	for (int h = 0; h < config->hosts_count; h++)
 	{
 		host = &config->hosts[h];
-		i = 0;
-		while (i < host->ports_count)
+		ports_per_thread = (config->ports_count + config->speedup - 1)
+			/ config->speedup;
+		active_threads = 0;
+		for (int t = 0; t < config->speedup; t++)
 		{
+			start = t * ports_per_thread;
+			end = (t + 1) * ports_per_thread;
+			if (start >= config->ports_count)
+				break ;
+			if (end > config->ports_count)
+				end = config->ports_count;
 			targ = malloc(sizeof(t_thread_arg));
 			targ->config = config;
 			targ->host = host;
-			targ->port = host->ports_list[i];
-			targ->result = &host->result[i];
-			pthread_create(&threads[active_threads], NULL, thread_scan, targ);
+			targ->sock = sock;
+			targ->port_start = start;
+			targ->port_end = end;
+			pthread_create(&threads[active_threads], NULL, thread_send, targ);
 			active_threads++;
-			if (active_threads == config->speedup)
-			{
-				for (int j = 0; j < active_threads; j++)
-					pthread_join(threads[j], NULL);
-				active_threads = 0;
-			}
-			i++;
 		}
+		for (int j = 0; j < active_threads; j++)
+			pthread_join(threads[j], NULL);
 	}
-	for (int j = 0; j < active_threads; j++)
-		pthread_join(threads[j], NULL);
 	free(threads);
+}
+
+static void	run_scan(t_config *config)
+{
+	int				sock;
+	pthread_t		listener;
+	t_listener_arg	*larg;
+	pcap_t			*handle;
+
+	get_local_ip(config->local_ip, sizeof(config->local_ip));
+	larg = create_listener(&listener, config);
+	if (!larg)
+		return ;
+	sock = set_socket();
+	create_sender(sock, config);
+	close(sock);
+	// TODO: penser autrement pour attendre le handle ?
+	handle = NULL;
+	while (!handle)
+	{
+		pthread_mutex_lock(&larg->handle_mutex);
+		handle = larg->handle;
+		pthread_mutex_unlock(&larg->handle_mutex);
+		usleep(1000);
+	}
+	pcap_breakloop(handle);
+	pthread_join(listener, NULL);
+	pthread_mutex_destroy(&larg->handle_mutex);
 }
 
 int	main(int argc, char **argv)

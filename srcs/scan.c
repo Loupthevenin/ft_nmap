@@ -1,91 +1,72 @@
 #include "../includes/ft_nmap.h"
 
-static const char	*interpret_syn(const char *state)
+static int	send_packet(int sock, const char *src_ip, const char *dst_ip,
+		int dport, int proto, int flags)
 {
-	return (state);
-}
+	char				packet[4096];
+	struct sockaddr_in	dest;
+	ssize_t				packet_size;
 
-static const char	*interpret_fin(const char *state)
-{
-	if (strcmp(state, "Closed") == 0)
-		return ("Closed");
-	return ("Open|Filtered");
-}
-
-static const char	*interpret_null(const char *state)
-{
-	if (strcmp(state, "Closed") == 0)
-		return ("Closed");
-	return ("Open|Filtered");
-}
-
-static const char	*interpret_xmas(const char *state)
-{
-	if (strcmp(state, "Closed") == 0)
-		return ("Closed");
-	return ("Open|Filtered");
-}
-
-static const char	*interpret_ack(const char *state)
-{
-	if (strcmp(state, "Closed") == 0 || strcmp(state, "Open") == 0)
-		return ("Unfiltered");
-	return ("Filtered");
-}
-
-static void	scan(t_host *host, int port, t_result *res, t_scan_params params)
-{
-	char				errbuf[PCAP_ERRBUF_SIZE];
-	pcap_t				*handle;
-	struct bpf_program	fp;
-	char				local_ip[INET_ADDRSTRLEN];
-
-	if (get_local_ip(local_ip, sizeof(local_ip)) < 0)
+	int sport = 54321; // port source fixe pour la capture
+	// Construire le paquet selon le protocole
+	if (proto == IPPROTO_TCP)
+		packet_size = create_tcp_packet(packet, src_ip, dst_ip, sport, dport,
+				flags);
+	else if (proto == IPPROTO_UDP)
+		packet_size = create_udp_packet(packet, src_ip, dst_ip, sport, dport);
+	else
 	{
-		res->scan_results[params.index] = strdup("Error (local ip)");
-		return ;
+		fprintf(stderr, "Unsupported proto\n");
+		return (-1);
 	}
-	handle = pcap_open_live(DEFAULT_IFACE, BUFSIZ, 1, 1000, errbuf);
-	if (!handle)
+	// Préparer la destination
+	memset(&dest, 0, sizeof(dest));
+	dest.sin_family = AF_INET;
+	dest.sin_port = htons(dport);
+	dest.sin_addr.s_addr = inet_addr(dst_ip);
+	// Envoyer le paquet
+	if (sendto(sock, packet, packet_size, 0, (struct sockaddr *)&dest,
+			sizeof(dest)) < 0)
 	{
-		res->scan_results[params.index] = strdup("Error");
-		return ;
+		perror("sendto");
+		return (-1);
 	}
-	if (build_filter(handle, host->ip, local_ip, params.is_udp, &fp) == -1)
-	{
-		res->scan_results[params.index] = strdup("Error");
-		pcap_close(handle);
-		return ;
-	}
-	pcap_freecode(&fp);
-	// Envoi du paquet
-	send_raw(host->ip, port, params.is_udp ? IPPROTO_UDP : IPPROTO_TCP,
-			params.flags, local_ip);
-	// Attente de la réponse
-	res->scan_results[params.index] = wait_and_interpret(handle, port, &params);
-	pcap_close(handle);
+	return (0);
 }
 
-void	scan_port(t_config *config, t_host *host, int port, t_result *result)
+static void	send_scans(t_config *config, char *ip, int port, int sock)
 {
 	int	scan_type;
 
 	scan_type = config->scans;
 	if (scan_type & SCAN_SYN)
-		scan(host, port, result, (t_scan_params){INDEX_SYN, TH_SYN, 0,
-				interpret_syn});
+		send_packet(sock, config->local_ip, ip, port, IPPROTO_TCP, TH_SYN);
 	if (scan_type & SCAN_FIN)
-		scan(host, port, result, (t_scan_params){INDEX_FIN, TH_FIN, 0,
-				interpret_fin});
+		send_packet(sock, config->local_ip, ip, port, IPPROTO_TCP, TH_FIN);
 	if (scan_type & SCAN_XMAS)
-		scan(host, port, result, (t_scan_params){INDEX_XMAS,
-				TH_FIN | TH_PUSH | TH_URG, 0, interpret_xmas});
+		send_packet(sock, config->local_ip, ip, port, IPPROTO_TCP,
+				TH_FIN | TH_PUSH | TH_URG);
 	if (scan_type & SCAN_NULL)
-		scan(host, port, result, (t_scan_params){INDEX_NULL, 0, 0,
-				interpret_null});
+		send_packet(sock, config->local_ip, ip, port, IPPROTO_TCP, 0);
 	if (scan_type & SCAN_ACK)
-		scan(host, port, result, (t_scan_params){INDEX_ACK, TH_ACK, 0,
-				interpret_ack});
+		send_packet(sock, config->local_ip, ip, port, IPPROTO_TCP, TH_ACK);
 	if (scan_type & SCAN_UDP)
-		scan(host, port, result, (t_scan_params){INDEX_UDP, 0, 1, NULL});
+		send_packet(sock, config->local_ip, ip, port, IPPROTO_UDP, 0);
+}
+
+void	*thread_send(void *arg)
+{
+	t_thread_arg	*targ;
+	t_host			*host;
+	int				port;
+
+	targ = (t_thread_arg *)arg;
+	host = targ->host;
+	for (int i = targ->port_start; i < targ->port_end; i++)
+	{
+		port = host->ports_list[i];
+		send_scans(targ->config, targ->host->ip, port, targ->sock);
+	}
+	free(targ);
+	return (NULL);
 }

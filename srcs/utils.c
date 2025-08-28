@@ -68,10 +68,9 @@ void	print_config(const t_config *config)
 		for (int h = 0; h < config->hosts_count; h++)
 		{
 			host = &config->hosts[h];
-			printf("    Hostname: %s, IP: %s, Interface: %s\n",
+			printf("    Hostname: %s, IP: %s\n",
 					host->hostname ? host->hostname : "N/A",
-					host->ip ? host->ip : "N/A",
-					host->iface ? host->iface : "N/A");
+					host->ip ? host->ip : "N/A");
 			printf("      Ports (%d): ", host->ports_count);
 			for (int p = 0; p < host->ports_count; p++)
 			{

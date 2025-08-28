@@ -64,7 +64,6 @@ typedef struct s_host
 	char *ip;        // IP résolue
 	int *ports_list; // liste de ports pour ce host
 	int				ports_count;
-	char *iface;      // interface réseau
 	t_result *result; //  résultat liés aux ports
 }					t_host;
 
@@ -81,22 +80,31 @@ typedef struct s_config
 	int hosts_count; // nombre de hosts
 
 	// Common fields
-	char *ports;     // string representation of ports
-	int *ports_list; // ports globaux
-	int ports_count; // nombre de ports
-	int speedup;     // threads max
-	int scans;       // bitmask des scans
-	char *scan_type; // string user input des scans
-	int show_help;   // flag pour afficher l'aide
+	char *ports;                    // string representation of ports
+	int *ports_list;                // ports globaux
+	int ports_count;                // nombre de ports
+	int speedup;                    // threads max
+	int scans;                      // bitmask des scans
+	char *scan_type;                // string user input des scans
+	int show_help;                  // flag pour afficher l'aide
+	char local_ip[INET_ADDRSTRLEN]; // ip local
 }					t_config;
 
 typedef struct s_thread_arg
 {
 	t_config		*config;
 	t_host			*host;
-	int				port;
-	t_result		*result;
+	int				sock;
+	int				port_start;
+	int				port_end;
 }					t_thread_arg;
+
+typedef struct s_listener_arg
+{
+	t_config		*config;
+	pcap_t			*handle;
+	pthread_mutex_t	handle_mutex;
+}					t_listener_arg;
 
 typedef struct s_scan_params
 {
@@ -120,8 +128,8 @@ typedef struct s_pseudo_tcp
 int					parse_args(t_config *config, int argc, char **argv);
 int					resolve_hostname(const char *hostname, char **ip);
 char				**parse_ips_from_file(const char *filename, int *count);
-void				scan_port(t_config *config, t_host *host, int port,
-						t_result *result);
+void				*thread_listener(void *arg);
+void				*thread_send(void *arg);
 
 // Packets
 int					create_tcp_packet(char *buff, const char *src_ip,
@@ -132,14 +140,11 @@ int					create_udp_packet(char *buff, const char *src_ip,
 
 // Pcap
 int					build_filter(pcap_t *handle, const char *target_ip,
-						const char *local_ip, int is_udp,
-						struct bpf_program *fp);
+						const char *local_ip, struct bpf_program *fp);
 char				*wait_and_interpret(pcap_t *handle, int port,
 						t_scan_params *params);
 int					pcap_wait_response(pcap_t *handle, int dport, int proto,
 						char *out_state, size_t out_len);
-int					send_raw(const char *dst_ip, int dport, int proto,
-						int flags, char *src_ip);
 
 // Utils
 int					get_local_ip(char *buffer, size_t buflen);
