@@ -12,7 +12,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.box = box
   config.vm.provider provider do |vb|
-    vb.name = "ft_traceroute"
+    vb.name = "ft_nmap"
     vb.memory = 1024
   end
 
@@ -29,7 +29,8 @@ Vagrant.configure("2") do |config|
       traceroute \
       inetutils-ping \
       net-tools \
-      procps
+      procps \
+      valgrind
   SHELL
 end
 
