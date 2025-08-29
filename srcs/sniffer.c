@@ -81,11 +81,18 @@ static void	packet_handler(unsigned char *user, const struct pcap_pkthdr *h,
 {
 	t_config			*config;
 	const unsigned char	*packet;
+	long unsigned int	ip_len;
 
 	(void)h;
 	config = (t_config *)user;
 	// Decalage header ethernet;
-	packet = bytes + 14;
+	packet = bytes + config->datalink_offset;
+	ip_len = h->caplen - config->datalink_offset;
+	if (sizeof(struct ip) > ip_len)
+	{
+		printf("error packet \n");
+		return ;
+	}
 	// Recup header IP;
 	handle_packet(config, packet);
 }
@@ -112,6 +119,7 @@ void	*thread_listener(void *arg)
 	pcap_t				*handle;
 	char				errbuf[PCAP_ERRBUF_SIZE];
 	struct bpf_program	fp;
+	int					offset;
 
 	larg = (t_listener_arg *)arg;
 	config = larg->config;
@@ -124,15 +132,18 @@ void	*thread_listener(void *arg)
 	}
 	pthread_mutex_lock(&larg->handle_mutex);
 	larg->handle = handle;
+	offset = get_datalink_offset(handle);
 	pthread_mutex_unlock(&larg->handle_mutex);
+	if (offset < 0)
+		return (NULL);
+	config->datalink_offset = offset;
 	if (build_filter(handle, &fp) == -1)
 	{
 		fprintf(stderr, "error: build_filter failed\n");
 		return (NULL);
 	}
-	if (pcap_loop(handle, -1, packet_handler, (unsigned char *)config) < 0)
-		fprintf(stderr, "error: pcap_loop returned an error: %s\n",
-				pcap_geterr(handle));
+	if (pcap_loop(handle, -1, packet_handler, (unsigned char *)config) == -1)
+		fprintf(stderr, "pcap_loop error: %s\n", pcap_geterr(handle));
 	pcap_freecode(&fp);
 	return (NULL);
 }

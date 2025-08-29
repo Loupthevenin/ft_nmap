@@ -95,6 +95,7 @@ typedef struct s_config
 	int show_help;                  // flag pour afficher l'aide
 	char local_ip[INET_ADDRSTRLEN]; // ip local
 	pthread_mutex_t result_mutex;   // mutex for result
+	int				datalink_offset;
 }					t_config;
 
 typedef struct s_thread_arg
@@ -147,6 +148,7 @@ int					create_udp_packet(char *buff, const char *src_ip,
 
 // Utils
 int					get_local_ip(char *buffer, size_t buflen);
+int					get_datalink_offset(pcap_t *handle);
 unsigned short		cksum(unsigned short *buf, int n);
 void				print_help(void);
 void				print_config(const t_config *config);

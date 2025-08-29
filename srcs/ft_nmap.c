@@ -1,5 +1,35 @@
 #include "../includes/ft_nmap.h"
-#include <unistd.h>
+
+static void	init_scan_results(t_result *res, int scans)
+{
+	for (int i = 0; i < INDEX_COUNT; i++)
+	{
+		switch (i)
+		{
+		case INDEX_SYN:
+			res->scan_results[i] = (scans & SCAN_SYN) ? SCAN_FILTERED : NULL;
+			break ;
+		case INDEX_NULL:
+			res->scan_results[i] = (scans & SCAN_NULL) ? SCAN_OPEN_FILTERED : NULL;
+			break ;
+		case INDEX_ACK:
+			res->scan_results[i] = (scans & SCAN_ACK) ? SCAN_FILTERED : NULL;
+			break ;
+		case INDEX_FIN:
+			res->scan_results[i] = (scans & SCAN_FIN) ? SCAN_OPEN_FILTERED : NULL;
+			break ;
+		case INDEX_XMAS:
+			res->scan_results[i] = (scans & SCAN_XMAS) ? SCAN_OPEN_FILTERED : NULL;
+			break ;
+		case INDEX_UDP:
+			res->scan_results[i] = (scans & SCAN_UDP) ? SCAN_OPEN_FILTERED : NULL;
+			break ;
+		default:
+			res->scan_results[i] = NULL;
+		}
+		res->conclusion = NULL;
+	}
+}
 
 static void	allocate_results_for_hosts(t_config *config)
 {
@@ -22,9 +52,7 @@ static void	allocate_results_for_hosts(t_config *config)
 			host->ports_list[i] = config->ports_list[i];
 			host->result[i].port = config->ports_list[i];
 			host->result[i].service = NULL;
-			for (int j = 0; j < INDEX_COUNT; j++)
-				host->result[i].scan_results[j] = NULL;
-			host->result[i].conclusion = NULL;
+			init_scan_results(&host->result[i], config->scans);
 		}
 	}
 }
@@ -132,7 +160,7 @@ static void	run_scan(t_config *config)
 		pthread_mutex_unlock(&larg->handle_mutex);
 		usleep(1000);
 	}
-	sleep(10);
+	sleep(3);
 	pcap_breakloop(handle);
 	pthread_join(listener, NULL);
 	pcap_close(handle);

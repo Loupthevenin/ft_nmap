@@ -55,6 +55,26 @@ int	get_local_ip(char *buffer, size_t buflen)
 	return (0);
 }
 
+int	get_datalink_offset(pcap_t *handle)
+{
+	int	dl_type;
+
+	dl_type = pcap_datalink(handle);
+	switch (dl_type)
+	{
+	case DLT_EN10MB:
+		return (14);
+	case DLT_NULL:
+	case DLT_LOOP:
+		return (4);
+	case DLT_RAW:
+		return (0);
+	default:
+		fprintf(stderr, "Unsupported datalink type: %d\n", dl_type);
+		return (-1);
+	}
+}
+
 void	print_help(void)
 {
 	printf("Help Screen\n");
