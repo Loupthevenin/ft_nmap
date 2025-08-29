@@ -2,14 +2,26 @@
 
 unsigned short	cksum(unsigned short *buf, int n)
 {
-	unsigned long	sum;
+	register long	sum;
+	unsigned short	oddbyte;
+	register short	answer;
 
 	sum = 0;
-	for (; n > 0; n--)
+	while (n > 1)
+	{
 		sum += *buf++;
-	sum = (sum >> 16) + (sum & 0xFFFF);
+		n -= 2;
+	}
+	if (n == 1)
+	{
+		oddbyte = 0;
+		*((unsigned char *)&oddbyte) = *(unsigned char *)buf;
+		sum += oddbyte;
+	}
+	sum = (sum >> 16) + (sum & 0xffff);
 	sum += (sum >> 16);
-	return (unsigned short)(~sum);
+	answer = (short)~sum;
+	return (answer);
 }
 
 int	get_local_ip(char *buffer, size_t buflen)

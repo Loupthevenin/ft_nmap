@@ -28,6 +28,12 @@
 
 # define DEFAULT_IFACE "eth0"
 
+# define SCAN_OPEN "open"
+# define SCAN_CLOSED "closed"
+# define SCAN_FILTERED "filtered"
+# define SCAN_UNFILTERED "unfiltered"
+# define SCAN_OPEN_FILTERED "open|filtered"
+
 typedef enum e_scan_type
 {
 	SCAN_SYN = 1 << 0,      // 000001
@@ -88,6 +94,7 @@ typedef struct s_config
 	char *scan_type;                // string user input des scans
 	int show_help;                  // flag pour afficher l'aide
 	char local_ip[INET_ADDRSTRLEN]; // ip local
+	pthread_mutex_t result_mutex;   // mutex for result
 }					t_config;
 
 typedef struct s_thread_arg
@@ -137,14 +144,6 @@ int					create_tcp_packet(char *buff, const char *src_ip,
 						int scan_type);
 int					create_udp_packet(char *buff, const char *src_ip,
 						const char *dst_ip, int sport, int dport);
-
-// Pcap
-int					build_filter(pcap_t *handle, const char *target_ip,
-						const char *local_ip, struct bpf_program *fp);
-char				*wait_and_interpret(pcap_t *handle, int port,
-						t_scan_params *params);
-int					pcap_wait_response(pcap_t *handle, int dport, int proto,
-						char *out_state, size_t out_len);
 
 // Utils
 int					get_local_ip(char *buffer, size_t buflen);

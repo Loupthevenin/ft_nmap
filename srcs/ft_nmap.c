@@ -1,13 +1,5 @@
 #include "../includes/ft_nmap.h"
-
-static void	init_result(t_result *result, int port)
-{
-	result->port = port;
-	result->service = NULL;
-	result->conclusion = NULL;
-	for (int i = 0; i < 6; i++)
-		result->scan_results[i] = NULL;
-}
+#include <unistd.h>
 
 static void	allocate_results_for_hosts(t_config *config)
 {
@@ -21,14 +13,19 @@ static void	allocate_results_for_hosts(t_config *config)
 		host->ports_list = malloc(sizeof(int) * host->ports_count);
 		if (!host->ports_list)
 			continue ;
-		for (int i = 0; i < host->ports_count; i++)
-			host->ports_list[i] = config->ports_list[i];
 		// Allouer et initialiser les résultats
 		host->result = malloc(sizeof(t_result) * host->ports_count);
 		if (!host->result)
 			continue ;
-		for (int k = 0; k < host->ports_count; k++)
-			init_result(&host->result[k], host->ports_list[k]);
+		for (int i = 0; i < host->ports_count; i++)
+		{
+			host->ports_list[i] = config->ports_list[i];
+			host->result[i].port = config->ports_list[i];
+			host->result[i].service = NULL;
+			for (int j = 0; j < INDEX_COUNT; j++)
+				host->result[i].scan_results[j] = NULL;
+			host->result[i].conclusion = NULL;
+		}
 	}
 }
 
@@ -64,6 +61,7 @@ static t_listener_arg	*create_listener(pthread_t *listener, t_config *config)
 	larg->config = config;
 	larg->handle = NULL;
 	pthread_mutex_init(&larg->handle_mutex, NULL);
+	pthread_mutex_init(&config->result_mutex, NULL);
 	pthread_create(listener, NULL, &thread_listener, larg);
 	return (larg);
 }
@@ -121,6 +119,7 @@ static void	run_scan(t_config *config)
 	larg = create_listener(&listener, config);
 	if (!larg)
 		return ;
+	usleep(100000);
 	sock = set_socket();
 	create_sender(sock, config);
 	close(sock);
@@ -133,9 +132,13 @@ static void	run_scan(t_config *config)
 		pthread_mutex_unlock(&larg->handle_mutex);
 		usleep(1000);
 	}
+	sleep(10);
 	pcap_breakloop(handle);
 	pthread_join(listener, NULL);
+	pcap_close(handle);
 	pthread_mutex_destroy(&larg->handle_mutex);
+	pthread_mutex_destroy(&config->result_mutex);
+	free(larg);
 }
 
 int	main(int argc, char **argv)
@@ -153,8 +156,8 @@ int	main(int argc, char **argv)
 		free_config(&config);
 		return (0);
 	}
-	print_config(&config);
 	allocate_results_for_hosts(&config);
+	print_config(&config);
 	printf("\nStarting ft_nmap scan...\n");
 	run_scan(&config);
 	print_results(&config);
