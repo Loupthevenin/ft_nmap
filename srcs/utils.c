@@ -2,9 +2,8 @@
 
 unsigned short	cksum(unsigned short *buf, int n)
 {
-	register long	sum;
+	long			sum;
 	unsigned short	oddbyte;
-	register short	answer;
 
 	sum = 0;
 	while (n > 1)
@@ -20,8 +19,7 @@ unsigned short	cksum(unsigned short *buf, int n)
 	}
 	sum = (sum >> 16) + (sum & 0xffff);
 	sum += (sum >> 16);
-	answer = (short)~sum;
-	return (answer);
+	return (unsigned short)(~sum);
 }
 
 int	get_local_ip(char *buffer, size_t buflen)
@@ -73,6 +71,55 @@ int	get_datalink_offset(pcap_t *handle)
 		fprintf(stderr, "Unsupported datalink type: %d\n", dl_type);
 		return (-1);
 	}
+}
+
+const char	*get_interface(const char *target_ip)
+{
+	static char			iface_name[128];
+	uint32_t			target;
+	struct sockaddr_in	*addr;
+	struct sockaddr_in	*mask;
+
+	struct ifaddrs *ifaddr, *ifa;
+	target = inet_addr(target_ip);
+	if (getifaddrs(&ifaddr) == -1)
+	{
+		perror("getifaddrs");
+		return ("eth0"); // fallback
+	}
+	for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
+	{
+		if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET)
+			continue ;
+		// skip loopback
+		if (strcmp(ifa->ifa_name, "lo") == 0)
+			continue ;
+		addr = (struct sockaddr_in *)ifa->ifa_addr;
+		mask = (struct sockaddr_in *)ifa->ifa_netmask;
+		// vérifier si la cible est dans le même subnet
+		if (mask
+			&& ((addr->sin_addr.s_addr & mask->sin_addr.s_addr) == (target & mask->sin_addr.s_addr)))
+		{
+			strncpy(iface_name, ifa->ifa_name, sizeof(iface_name) - 1);
+			iface_name[sizeof(iface_name) - 1] = 0;
+			freeifaddrs(ifaddr);
+			return (iface_name);
+		}
+	}
+	// si pas dans le même subnet, retourner la première interface active
+	for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
+	{
+		if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET)
+			continue ;
+		if (strcmp(ifa->ifa_name, "lo") == 0)
+			continue ;
+		strncpy(iface_name, ifa->ifa_name, sizeof(iface_name) - 1);
+		iface_name[sizeof(iface_name) - 1] = 0;
+		freeifaddrs(ifaddr);
+		return (iface_name);
+	}
+	freeifaddrs(ifaddr);
+	return ("eth0"); // fallback ultime
 }
 
 void	print_help(void)

@@ -24,11 +24,12 @@ static const char	*tcp_scan_result(struct tcphdr *tcp, int scan_index)
 	}
 }
 
-static void	handle_packet(t_config *config, const unsigned char *packet)
+void	handle_packet(t_config *config, const unsigned char *packet)
 {
 	struct ip		*ip;
 	char			*src_ip;
 	int				src_port;
+	int				dst_port;
 	t_host			*host;
 	struct tcphdr	*tcp;
 	struct udphdr	*udp;
@@ -36,27 +37,52 @@ static void	handle_packet(t_config *config, const unsigned char *packet)
 
 	ip = (struct ip *)packet;
 	src_ip = inet_ntoa(ip->ip_src);
+	printf("[DEBUG] IP packet received: src=%s dst=%s proto=%d\n",
+			src_ip,
+			inet_ntoa(ip->ip_dst),
+			ip->ip_p);
+	fflush(stdout);
 	for (int h = 0; h < config->hosts_count; h++)
 	{
 		host = &config->hosts[h];
 		if (strcmp(src_ip, host->ip) != 0)
+		{
+			printf("[DEBUG] IP %s not in hosts list\n", src_ip);
+			fflush(stdout);
 			continue ;
+		}
 		if (ip->ip_p == IPPROTO_TCP)
 		{
 			tcp = (struct tcphdr *)(packet + ip->ip_hl * 4);
 			src_port = ntohs(tcp->source);
-			for (int i = 0; i < host->ports_count; i++)
+			dst_port = ntohs(tcp->dest);
+			printf("[DEBUG] TCP packet: src_port=%d dst_port=%d\n", src_port,
+					dst_port);
+			fflush(stdout);
+			if (dst_port == 54321)
 			{
-				if (host->ports_list[i] != src_port)
-					continue ;
-				for (int s = 0; s < INDEX_COUNT; s++)
+				printf("[DEBUG] Packet arrived at my source port!\n");
+				fflush(stdout);
+				for (int i = 0; i < host->ports_count; i++)
 				{
-					res = tcp_scan_result(tcp, s);
-					printf("res port: %s\n", res);
-					pthread_mutex_lock(&config->result_mutex);
-					if (res)
-						host->result[i].scan_results[s] = (char *)res;
-					pthread_mutex_unlock(&config->result_mutex);
+					if (host->ports_list[i] == src_port)
+					{
+						printf("[DEBUG] Matching host port: %d\n", src_port);
+						fflush(stdout);
+						for (int s = 0; s < INDEX_COUNT; s++)
+						{
+							res = tcp_scan_result(tcp, s);
+							if (res)
+							{
+								printf("[DEBUG] Scan index %d result: %s\n", s,
+										res);
+								fflush(stdout);
+								pthread_mutex_lock(&config->result_mutex);
+								host->result[i].scan_results[s] = (char *)res;
+								pthread_mutex_unlock(&config->result_mutex);
+							}
+						}
+					}
 				}
 			}
 		}
@@ -76,6 +102,68 @@ static void	handle_packet(t_config *config, const unsigned char *packet)
 	}
 }
 
+void	handle_packet_debug(t_config *config, const unsigned char *packet)
+{
+	struct ip		*ip;
+	struct tcphdr	*tcp;
+	struct udphdr	*udp;
+	t_host			*host;
+	int				port;
+
+	ip = (struct ip *)packet;
+	int src_port, dst_port;
+	printf("[DEBUG] IP packet: src=%s dst=%s proto=%d\n",
+			inet_ntoa(ip->ip_src),
+			inet_ntoa(ip->ip_dst),
+			ip->ip_p);
+	fflush(stdout);
+	if (ip->ip_p == IPPROTO_TCP)
+	{
+		tcp = (struct tcphdr *)(packet + ip->ip_hl * 4);
+		src_port = ntohs(tcp->source);
+		dst_port = ntohs(tcp->dest);
+		printf("[DEBUG][TCP] src_port=%d dst_port=%d flags=[SYN=%d ACK=%d RST=%d FIN=%d PSH=%d URG=%d]\n",
+				src_port,
+				dst_port,
+				tcp->syn,
+				tcp->ack,
+				tcp->rst,
+				tcp->fin,
+				tcp->psh,
+				tcp->urg);
+		fflush(stdout);
+		// Affiche les correspondances avec hosts connus
+		for (int h = 0; h < config->hosts_count; h++)
+		{
+			host = &config->hosts[h];
+			printf("[DEBUG][TCP] Checking against host %s\n", host->ip);
+			fflush(stdout);
+			for (int i = 0; i < host->ports_count; i++)
+			{
+				port = host->ports_list[i];
+				if (src_port == port || dst_port == port)
+				{
+					printf("[DEBUG][TCP] Host port match: %d\n", port);
+					fflush(stdout);
+				}
+			}
+		}
+	}
+	else if (ip->ip_p == IPPROTO_UDP)
+	{
+		udp = (struct udphdr *)(packet + ip->ip_hl * 4);
+		src_port = ntohs(udp->source);
+		dst_port = ntohs(udp->dest);
+		printf("[DEBUG][UDP] src_port=%d dst_port=%d\n", src_port, dst_port);
+		fflush(stdout);
+	}
+	else
+	{
+		printf("[DEBUG] Non TCP/UDP packet, proto=%d\n", ip->ip_p);
+		fflush(stdout);
+	}
+}
+
 static void	packet_handler(unsigned char *user, const struct pcap_pkthdr *h,
 		const unsigned char *bytes)
 {
@@ -88,6 +176,11 @@ static void	packet_handler(unsigned char *user, const struct pcap_pkthdr *h,
 	// Decalage header ethernet;
 	packet = bytes + config->datalink_offset;
 	ip_len = h->caplen - config->datalink_offset;
+	printf("[DEBUG] Packet captured: caplen=%u datalink_offset=%d ip_len=%lu\n",
+			h->caplen,
+			config->datalink_offset,
+			ip_len);
+	fflush(stdout);
 	if (sizeof(struct ip) > ip_len)
 	{
 		printf("error packet \n");
@@ -95,14 +188,15 @@ static void	packet_handler(unsigned char *user, const struct pcap_pkthdr *h,
 	}
 	// Recup header IP;
 	handle_packet(config, packet);
+	/* handle_packet_debug(config, packet); */
 }
 
-static int	build_filter(pcap_t *handle, struct bpf_program *fp)
+int	build_filter(pcap_t *handle, struct bpf_program *fp, bpf_u_int32 *netmask)
 {
 	char	filter[1024];
 
 	snprintf(filter, sizeof(filter), "ip and (tcp or udp or icmp)");
-	if (pcap_compile(handle, fp, filter, 0, PCAP_NETMASK_UNKNOWN) == -1 ||
+	if (pcap_compile(handle, fp, filter, 0, *netmask) == -1 ||
 		pcap_setfilter(handle, fp) == -1)
 	{
 		fprintf(stderr, "error: pcap_compile/setfilter failed: %s\n",
@@ -120,11 +214,21 @@ void	*thread_listener(void *arg)
 	char				errbuf[PCAP_ERRBUF_SIZE];
 	struct bpf_program	fp;
 	int					offset;
+	bpf_u_int32			netmask;
+	bpf_u_int32			mask;
+	const char			*iface;
 
 	larg = (t_listener_arg *)arg;
 	config = larg->config;
+	iface = get_interface(config->hosts[0].ip);
+	printf("interface : %s\n", iface);
+	if (pcap_lookupnet(iface, &netmask, &mask, errbuf) == -1)
+	{
+		fprintf(stderr, "Error lookupnet: %s\n", errbuf);
+		return (NULL);
+	}
 	// TODO: changer DEFAULT_IFACE par une fonction get_interface;
-	handle = pcap_open_live(DEFAULT_IFACE, BUFSIZ, 1, 1000, errbuf);
+	handle = pcap_open_live(iface, BUFSIZ, 1, 1000, errbuf);
 	if (!handle)
 	{
 		fprintf(stderr, "error: pcap_open_live failed: %s\n", errbuf);
@@ -137,7 +241,7 @@ void	*thread_listener(void *arg)
 	if (offset < 0)
 		return (NULL);
 	config->datalink_offset = offset;
-	if (build_filter(handle, &fp) == -1)
+	if (build_filter(handle, &fp, &netmask) == -1)
 	{
 		fprintf(stderr, "error: build_filter failed\n");
 		return (NULL);

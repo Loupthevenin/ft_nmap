@@ -1,5 +1,38 @@
 #include "../includes/ft_nmap.h"
 
+static unsigned short	tcp_checksum(struct ip *iph, struct tcphdr *tcph,
+		unsigned char *options, int options_len, unsigned char *payload,
+		int payload_len)
+{
+	t_pseudo_tcp	pseudo_header;
+	int				tcp_size;
+	int				total_len;
+	char			*buf;
+	unsigned short	sum;
+
+	tcp_size = sizeof(struct tcphdr) + options_len + payload_len;
+	pseudo_header.src_addr = iph->ip_src.s_addr;
+	pseudo_header.dst_addr = iph->ip_dst.s_addr;
+	pseudo_header.placeholder = 0;
+	pseudo_header.proto = IPPROTO_TCP;
+	pseudo_header.tcp_length = htons(tcp_size);
+	total_len = sizeof(pseudo_header) + tcp_size;
+	buf = malloc(total_len);
+	if (!buf)
+		return (0);
+	memcpy(buf, &pseudo_header, sizeof(pseudo_header));
+	memcpy(buf + sizeof(pseudo_header), tcph, sizeof(struct tcphdr));
+	if (options_len > 0)
+		memcpy(buf + sizeof(pseudo_header) + sizeof(struct tcphdr), options,
+				options_len);
+	if (payload_len > 0)
+		memcpy(buf + sizeof(pseudo_header) + sizeof(struct tcphdr)
+				+ options_len, payload, payload_len);
+	sum = cksum((unsigned short *)buf, (total_len + 1) / 2);
+	free(buf);
+	return (sum);
+}
+
 static int	create_ip_packet(char *buff, const char *src_ip, const char *dst_ip,
 		int proto, size_t payload_len)
 {
@@ -24,13 +57,16 @@ static int	create_ip_packet(char *buff, const char *src_ip, const char *dst_ip,
 }
 
 int	create_tcp_packet(char *buff, const char *src_ip, const char *dst_ip,
-		int sport, int dport, int scan_type)
+		int sport, int dport, int flags)
 {
 	struct ip		*iph;
 	struct tcphdr	*tcph;
 	size_t			ip_size;
-	t_pseudo_tcp	pseudo;
+	int				options_len;
+	int				payload_len;
 
+	options_len = 0;
+	payload_len = 0;
 	iph = (struct ip *)buff;
 	ip_size = create_ip_packet(buff, src_ip, dst_ip, IPPROTO_TCP,
 			sizeof(struct tcphdr));
@@ -41,26 +77,20 @@ int	create_tcp_packet(char *buff, const char *src_ip, const char *dst_ip,
 	tcph->dest = htons(dport);
 	tcph->seq = htonl(rand());
 	tcph->ack_seq = 0;
-	tcph->doff = sizeof(struct tcphdr) / 4;
+	tcph->doff = (sizeof(struct tcphdr) + options_len) / 4;
 	tcph->window = htons(14600);
 	// Flags
-	tcph->fin = (scan_type == SCAN_FIN || scan_type == SCAN_XMAS);
-	tcph->syn = (scan_type == SCAN_SYN);
-	tcph->rst = 0;
-	tcph->psh = (scan_type == SCAN_XMAS);
-	tcph->ack = (scan_type == SCAN_ACK);
-	tcph->urg = (scan_type == SCAN_XMAS);
+	tcph->fin = (flags & TH_FIN) ? 1 : 0;
+	tcph->syn = (flags & TH_SYN) ? 1 : 0;
+	tcph->rst = (flags & TH_RST) ? 1 : 0;
+	tcph->psh = (flags & TH_PUSH) ? 1 : 0;
+	tcph->ack = (flags & TH_ACK) ? 1 : 0;
+	tcph->urg = (flags & TH_URG) ? 1 : 0;
 	tcph->urg_ptr = 0;
 	tcph->check = 0;
 	// pseudo-header
-	pseudo.src_addr = iph->ip_src.s_addr;
-	pseudo.dst_addr = iph->ip_dst.s_addr;
-	pseudo.placeholder = 0;
-	pseudo.proto = IPPROTO_TCP;
-	pseudo.len = htons(sizeof(struct tcphdr));
-	memcpy(&pseudo.tcp, tcph, sizeof(struct tcphdr));
-	tcph->check = cksum((unsigned short *)&pseudo, sizeof(t_pseudo_tcp) / 2);
-	return (ip_size + sizeof(struct tcphdr));
+	tcph->check = tcp_checksum(iph, tcph, NULL, options_len, NULL, payload_len);
+	return (ip_size + sizeof(struct tcphdr) + options_len + payload_len);
 }
 
 int	create_udp_packet(char *buff, const char *src_ip, const char *dst_ip,

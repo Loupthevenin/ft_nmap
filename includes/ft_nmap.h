@@ -5,6 +5,7 @@
 # include <ctype.h>
 # include <errno.h>
 # include <fcntl.h>
+# include <ifaddrs.h>
 # include <limits.h>
 # include <netdb.h>
 # include <netinet/in.h>
@@ -25,8 +26,6 @@
 # include <sys/types.h>
 # include <sys/wait.h>
 # include <unistd.h>
-
-# define DEFAULT_IFACE "eth0"
 
 # define SCAN_OPEN "open"
 # define SCAN_CLOSED "closed"
@@ -114,22 +113,13 @@ typedef struct s_listener_arg
 	pthread_mutex_t	handle_mutex;
 }					t_listener_arg;
 
-typedef struct s_scan_params
-{
-	int				index;
-	int				flags;
-	int				is_udp;
-	const char		*(*interpret)(const char *state);
-}					t_scan_params;
-
 typedef struct s_pseudo_tcp
 {
 	unsigned int	src_addr;
 	unsigned int	dst_addr;
 	unsigned char	placeholder;
 	unsigned char	proto;
-	unsigned short	len;
-	struct tcphdr	tcp;
+	unsigned short	tcp_length;
 }					t_pseudo_tcp;
 
 // Main
@@ -149,6 +139,7 @@ int					create_udp_packet(char *buff, const char *src_ip,
 // Utils
 int					get_local_ip(char *buffer, size_t buflen);
 int					get_datalink_offset(pcap_t *handle);
+const char			*get_interface(const char *target_ip);
 unsigned short		cksum(unsigned short *buf, int n);
 void				print_help(void);
 void				print_config(const t_config *config);

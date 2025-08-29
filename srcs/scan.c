@@ -7,6 +7,7 @@ static int	send_packet(int sock, const char *src_ip, const char *dst_ip,
 	struct sockaddr_in	dest;
 	ssize_t				packet_size;
 
+	// TODO: random port
 	int sport = 54321; // port source fixe pour la capture
 	// Construire le paquet selon le protocole
 	if (proto == IPPROTO_TCP)

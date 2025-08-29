@@ -62,9 +62,8 @@ static int	set_socket(void)
 	int	sock;
 	int	one;
 
-	// On forge TOUT l’IP header → donc IPPROTO_RAW
 	one = 1;
-	sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+	sock = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
 	if (sock < 0)
 	{
 		perror("socket");
@@ -144,6 +143,7 @@ static void	run_scan(t_config *config)
 	pcap_t			*handle;
 
 	get_local_ip(config->local_ip, sizeof(config->local_ip));
+	printf("local_ip: %s\n", config->local_ip);
 	larg = create_listener(&listener, config);
 	if (!larg)
 		return ;
@@ -160,7 +160,7 @@ static void	run_scan(t_config *config)
 		pthread_mutex_unlock(&larg->handle_mutex);
 		usleep(1000);
 	}
-	sleep(3);
+	sleep(15);
 	pcap_breakloop(handle);
 	pthread_join(listener, NULL);
 	pcap_close(handle);
