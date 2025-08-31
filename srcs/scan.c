@@ -23,7 +23,6 @@ static int	send_packet(int sock, const char *src_ip, const char *dst_ip,
 	// Préparer la destination
 	memset(&dest, 0, sizeof(dest));
 	dest.sin_family = AF_INET;
-	dest.sin_port = htons(dport);
 	dest.sin_addr.s_addr = inet_addr(dst_ip);
 	// Envoyer le paquet
 	if (sendto(sock, packet, packet_size, 0, (struct sockaddr *)&dest,

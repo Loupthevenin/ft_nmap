@@ -26,8 +26,9 @@ static const char	*tcp_scan_result(struct tcphdr *tcp, int scan_index)
 
 void	handle_packet(t_config *config, const unsigned char *packet)
 {
-	struct ip		*ip;
-	char			*src_ip;
+	struct iphdr	*iph;
+	char			src_ip[INET_ADDRSTRLEN];
+	char			dst_ip[INET_ADDRSTRLEN];
 	int				src_port;
 	int				dst_port;
 	t_host			*host;
@@ -35,25 +36,18 @@ void	handle_packet(t_config *config, const unsigned char *packet)
 	struct udphdr	*udp;
 	const char		*res;
 
-	ip = (struct ip *)packet;
-	src_ip = inet_ntoa(ip->ip_src);
-	printf("[DEBUG] IP packet received: src=%s dst=%s proto=%d\n",
-			src_ip,
-			inet_ntoa(ip->ip_dst),
-			ip->ip_p);
+	iph = (struct iphdr *)packet;
+	inet_ntop(AF_INET, &iph->saddr, src_ip, sizeof(src_ip));
+	inet_ntop(AF_INET, &iph->daddr, dst_ip, sizeof(dst_ip));
+	printf("[DEBUG] IP packet received: src=%s dst=%s proto=%d\n", src_ip,
+			dst_ip, iph->protocol);
 	fflush(stdout);
 	for (int h = 0; h < config->hosts_count; h++)
 	{
 		host = &config->hosts[h];
-		if (strcmp(src_ip, host->ip) != 0)
+		if (iph->protocol == IPPROTO_TCP)
 		{
-			printf("[DEBUG] IP %s not in hosts list\n", src_ip);
-			fflush(stdout);
-			continue ;
-		}
-		if (ip->ip_p == IPPROTO_TCP)
-		{
-			tcp = (struct tcphdr *)(packet + ip->ip_hl * 4);
+			tcp = (struct tcphdr *)(packet + iph->ihl * 4);
 			src_port = ntohs(tcp->source);
 			dst_port = ntohs(tcp->dest);
 			printf("[DEBUG] TCP packet: src_port=%d dst_port=%d\n", src_port,
@@ -86,9 +80,9 @@ void	handle_packet(t_config *config, const unsigned char *packet)
 				}
 			}
 		}
-		else if (ip->ip_p == IPPROTO_UDP)
+		else if (iph->protocol == IPPROTO_UDP)
 		{
-			udp = (struct udphdr *)(packet + ip->ip_hl * 4);
+			udp = (struct udphdr *)(packet + iph->ihl * 4);
 			src_port = ntohs(udp->source);
 			for (int i = 0; i < host->ports_count; i++)
 			{
@@ -99,68 +93,6 @@ void	handle_packet(t_config *config, const unsigned char *packet)
 				pthread_mutex_unlock(&config->result_mutex);
 			}
 		}
-	}
-}
-
-void	handle_packet_debug(t_config *config, const unsigned char *packet)
-{
-	struct ip		*ip;
-	struct tcphdr	*tcp;
-	struct udphdr	*udp;
-	t_host			*host;
-	int				port;
-
-	ip = (struct ip *)packet;
-	int src_port, dst_port;
-	printf("[DEBUG] IP packet: src=%s dst=%s proto=%d\n",
-			inet_ntoa(ip->ip_src),
-			inet_ntoa(ip->ip_dst),
-			ip->ip_p);
-	fflush(stdout);
-	if (ip->ip_p == IPPROTO_TCP)
-	{
-		tcp = (struct tcphdr *)(packet + ip->ip_hl * 4);
-		src_port = ntohs(tcp->source);
-		dst_port = ntohs(tcp->dest);
-		printf("[DEBUG][TCP] src_port=%d dst_port=%d flags=[SYN=%d ACK=%d RST=%d FIN=%d PSH=%d URG=%d]\n",
-				src_port,
-				dst_port,
-				tcp->syn,
-				tcp->ack,
-				tcp->rst,
-				tcp->fin,
-				tcp->psh,
-				tcp->urg);
-		fflush(stdout);
-		// Affiche les correspondances avec hosts connus
-		for (int h = 0; h < config->hosts_count; h++)
-		{
-			host = &config->hosts[h];
-			printf("[DEBUG][TCP] Checking against host %s\n", host->ip);
-			fflush(stdout);
-			for (int i = 0; i < host->ports_count; i++)
-			{
-				port = host->ports_list[i];
-				if (src_port == port || dst_port == port)
-				{
-					printf("[DEBUG][TCP] Host port match: %d\n", port);
-					fflush(stdout);
-				}
-			}
-		}
-	}
-	else if (ip->ip_p == IPPROTO_UDP)
-	{
-		udp = (struct udphdr *)(packet + ip->ip_hl * 4);
-		src_port = ntohs(udp->source);
-		dst_port = ntohs(udp->dest);
-		printf("[DEBUG][UDP] src_port=%d dst_port=%d\n", src_port, dst_port);
-		fflush(stdout);
-	}
-	else
-	{
-		printf("[DEBUG] Non TCP/UDP packet, proto=%d\n", ip->ip_p);
-		fflush(stdout);
 	}
 }
 
@@ -188,14 +120,13 @@ static void	packet_handler(unsigned char *user, const struct pcap_pkthdr *h,
 	}
 	// Recup header IP;
 	handle_packet(config, packet);
-	/* handle_packet_debug(config, packet); */
 }
 
 int	build_filter(pcap_t *handle, struct bpf_program *fp, bpf_u_int32 *netmask)
 {
 	char	filter[1024];
 
-	snprintf(filter, sizeof(filter), "ip and (tcp or udp or icmp)");
+	snprintf(filter, sizeof(filter), "ip");
 	if (pcap_compile(handle, fp, filter, 0, *netmask) == -1 ||
 		pcap_setfilter(handle, fp) == -1)
 	{

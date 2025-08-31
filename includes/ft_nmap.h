@@ -117,8 +117,8 @@ typedef struct s_pseudo_tcp
 {
 	unsigned int	src_addr;
 	unsigned int	dst_addr;
-	unsigned char	placeholder;
-	unsigned char	proto;
+	unsigned char	zero;
+	unsigned char	protocol;
 	unsigned short	tcp_length;
 }					t_pseudo_tcp;
 
