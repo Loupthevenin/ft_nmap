@@ -31,7 +31,6 @@ int create_tcp_packet(char *buff, const char *src_ip, const char *dst_ip,
 
   options_len = 0;
   payload_len = 0;
-  printf("create packet : src_ip: %s, dst_ip: %s", src_ip, dst_ip);
   ip_size = create_ip_packet(buff, src_ip, dst_ip, IPPROTO_TCP,
                              sizeof(struct tcphdr));
   tcph = (struct tcphdr *)(buff + ip_size);
