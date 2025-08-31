@@ -1,5 +1,6 @@
 #include "../includes/ft_nmap.h"
 
+// TODO: peut-etre changer : init a null et le set a close dans le sniffer si pas de réponse;
 static void	init_scan_results(t_result *res, int scans)
 {
 	for (int i = 0; i < INDEX_COUNT; i++)
@@ -152,6 +153,9 @@ static void	run_scan(t_config *config)
 	create_sender(sock, config);
 	close(sock);
 	// TODO: penser autrement pour attendre le handle ?
+	// TODO: plus besoin d'attendre le handle on veut : set une var a true quand tout est send puis
+	//	-> timeout et meme mieux : comme le vrai nmap :
+	// TODO: Si last_packet_time > RESPONSE_TIMEOUT => pcap_breakloop;
 	handle = NULL;
 	while (!handle)
 	{

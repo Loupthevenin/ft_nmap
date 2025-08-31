@@ -151,6 +151,7 @@ void	*thread_listener(void *arg)
 
 	larg = (t_listener_arg *)arg;
 	config = larg->config;
+	// TODO: prendre en compte le localhost donc rendre l'interface dynamique en fonction des plages d'ips;
 	iface = get_interface(config->hosts[0].ip);
 	printf("interface : %s\n", iface);
 	if (pcap_lookupnet(iface, &netmask, &mask, errbuf) == -1)
