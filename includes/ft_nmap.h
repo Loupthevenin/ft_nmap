@@ -33,6 +33,8 @@
 # define SCAN_UNFILTERED "unfiltered"
 # define SCAN_OPEN_FILTERED "open|filtered"
 
+# define TIMEOUT 500
+
 typedef enum e_scan_type
 {
 	SCAN_SYN = 1 << 0,      // 000001
@@ -93,7 +95,9 @@ typedef struct s_config
 	char *scan_type;                // string user input des scans
 	int show_help;                  // flag pour afficher l'aide
 	char local_ip[INET_ADDRSTRLEN]; // ip local
-	pthread_mutex_t result_mutex;   // mutex for result
+	long			last_packet_time;
+	pthread_mutex_t result_mutex; // mutex for result
+	pthread_mutex_t	packet_time_mutex;
 	int				datalink_offset;
 }					t_config;
 
@@ -141,6 +145,7 @@ int					get_local_ip(char *buffer, size_t buflen);
 int					get_datalink_offset(pcap_t *handle);
 const char			*get_interface(const char *target_ip);
 unsigned short		cksum(unsigned short *buf, int n);
+long				get_now_ms(void);
 void				print_help(void);
 void				print_config(const t_config *config);
 void				print_results(t_config *config);

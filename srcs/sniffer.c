@@ -27,6 +27,13 @@ static const char	*scan_result(struct tcphdr *tcp, int scan_index)
 	}
 }
 
+static void	update_last_packet_time(t_config *config)
+{
+	pthread_mutex_lock(&config->packet_time_mutex);
+	config->last_packet_time = get_now_ms();
+	pthread_mutex_unlock(&config->packet_time_mutex);
+}
+
 static void	check_packet(t_config *config, t_host *host, int src_port,
 		int dst_port, struct tcphdr *tcp)
 {
@@ -64,6 +71,7 @@ static void	check_protocols(t_config *config, t_host *host, struct iphdr *iph,
 {
 	struct tcphdr	*tcp;
 	struct udphdr	*udp;
+	struct icmphdr	*icmp;
 	int				src_port;
 	int				dst_port;
 
@@ -76,6 +84,7 @@ static void	check_protocols(t_config *config, t_host *host, struct iphdr *iph,
 				dst_port);
 		fflush(stdout);
 		check_packet(config, host, src_port, dst_port, tcp);
+		update_last_packet_time(config);
 	}
 	else if (iph->protocol == IPPROTO_UDP)
 	{
@@ -83,6 +92,19 @@ static void	check_protocols(t_config *config, t_host *host, struct iphdr *iph,
 		src_port = ntohs(udp->source);
 		dst_port = ntohs(udp->dest);
 		check_packet(config, host, src_port, dst_port, NULL);
+		update_last_packet_time(config);
+	}
+	else if (iph->protocol == IPPROTO_ICMP)
+	{
+		// TODO: implement icmp;
+		icmp = (struct icmphdr *)(packet + iph->ihl * 4);
+		printf("[DEBUG] ICMP packet: type=%d code=%d\n", icmp->type,
+				icmp->code);
+		fflush(stdout);
+		if (icmp->type == 3)
+		{
+		}
+		update_last_packet_time(config);
 	}
 }
 

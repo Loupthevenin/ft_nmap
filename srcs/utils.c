@@ -122,6 +122,14 @@ const char	*get_interface(const char *target_ip)
 	return ("eth0"); // fallback ultime
 }
 
+long	get_now_ms(void)
+{
+	struct timeval	tv;
+
+	gettimeofday(&tv, NULL);
+	return ((tv.tv_sec * 1000L) + (tv.tv_usec / 1000L));
+}
+
 void	print_help(void)
 {
 	printf("Help Screen\n");

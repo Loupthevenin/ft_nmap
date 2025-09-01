@@ -90,8 +90,33 @@ static t_listener_arg	*create_listener(pthread_t *listener, t_config *config)
 	larg->handle = NULL;
 	pthread_mutex_init(&larg->handle_mutex, NULL);
 	pthread_mutex_init(&config->result_mutex, NULL);
+	pthread_mutex_init(&config->packet_time_mutex, NULL);
 	pthread_create(listener, NULL, &thread_listener, larg);
 	return (larg);
+}
+
+static void	wait_for_timeout(t_config *config, t_listener_arg *larg)
+{
+	pcap_t	*handle;
+	long	now;
+	long	last_packet_time;
+
+	while (1)
+	{
+		pthread_mutex_lock(&larg->handle_mutex);
+		handle = larg->handle;
+		pthread_mutex_unlock(&larg->handle_mutex);
+		pthread_mutex_lock(&config->packet_time_mutex);
+		last_packet_time = config->last_packet_time;
+		pthread_mutex_unlock(&config->packet_time_mutex);
+		now = get_now_ms();
+		if (now - last_packet_time >= TIMEOUT)
+			break ;
+		usleep(100000);
+	}
+	if (handle)
+		pcap_breakloop(handle);
+	pcap_close(handle);
 }
 
 static void	create_sender(int sock, t_config *config)
@@ -141,7 +166,6 @@ static void	run_scan(t_config *config)
 	int				sock;
 	pthread_t		listener;
 	t_listener_arg	*larg;
-	pcap_t			*handle;
 
 	get_local_ip(config->local_ip, sizeof(config->local_ip));
 	printf("local_ip: %s\n", config->local_ip);
@@ -152,24 +176,12 @@ static void	run_scan(t_config *config)
 	sock = set_socket();
 	create_sender(sock, config);
 	close(sock);
-	// TODO: penser autrement pour attendre le handle ?
-	// TODO: plus besoin d'attendre le handle on veut : set une var a true quand tout est send puis
-	//	-> timeout et meme mieux : comme le vrai nmap :
-	// TODO: Si last_packet_time > RESPONSE_TIMEOUT => pcap_breakloop;
-	handle = NULL;
-	while (!handle)
-	{
-		pthread_mutex_lock(&larg->handle_mutex);
-		handle = larg->handle;
-		pthread_mutex_unlock(&larg->handle_mutex);
-		usleep(1000);
-	}
-	sleep(5);
-	pcap_breakloop(handle);
+	wait_for_timeout(config, larg);
 	pthread_join(listener, NULL);
-	pcap_close(handle);
+	// TODO: fonction de cleanup
 	pthread_mutex_destroy(&larg->handle_mutex);
 	pthread_mutex_destroy(&config->result_mutex);
+	pthread_mutex_destroy(&config->packet_time_mutex);
 	free(larg);
 }
 
