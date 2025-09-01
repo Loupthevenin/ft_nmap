@@ -164,7 +164,7 @@ static void	run_scan(t_config *config)
 		pthread_mutex_unlock(&larg->handle_mutex);
 		usleep(1000);
 	}
-	sleep(15);
+	sleep(5);
 	pcap_breakloop(handle);
 	pthread_join(listener, NULL);
 	pcap_close(handle);

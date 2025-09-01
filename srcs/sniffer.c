@@ -1,6 +1,6 @@
 #include "../includes/ft_nmap.h"
 
-static const char	*tcp_scan_result(struct tcphdr *tcp, int scan_index)
+static const char	*scan_result(struct tcphdr *tcp, int scan_index)
 {
 	switch (scan_index)
 	{
@@ -21,7 +21,7 @@ static const char	*tcp_scan_result(struct tcphdr *tcp, int scan_index)
 				&& !tcp->syn) ? (tcp->rst ? SCAN_UNFILTERED : SCAN_FILTERED) : NULL);
 	// TODO: revoir la logique pour udp sur open
 	case INDEX_UDP:
-		return (SCAN_OPEN_FILTERED);
+		return (SCAN_OPEN);
 	default:
 		return (NULL);
 	}
@@ -44,7 +44,7 @@ static void	check_packet(t_config *config, t_host *host, int src_port,
 				fflush(stdout);
 				for (int s = 0; s < INDEX_COUNT; s++)
 				{
-					res = tcp_scan_result(tcp, s);
+					res = scan_result(tcp, s);
 					if (res)
 					{
 						printf("[DEBUG] Scan index %d result: %s\n", s, res);
