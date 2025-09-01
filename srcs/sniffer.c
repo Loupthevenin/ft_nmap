@@ -19,22 +19,79 @@ static const char	*tcp_scan_result(struct tcphdr *tcp, int scan_index)
 	case INDEX_ACK:
 		return ((tcp->ack
 				&& !tcp->syn) ? (tcp->rst ? SCAN_UNFILTERED : SCAN_FILTERED) : NULL);
+	// TODO: revoir la logique pour udp sur open
+	case INDEX_UDP:
+		return (SCAN_OPEN_FILTERED);
 	default:
 		return (NULL);
 	}
 }
 
-void	handle_packet(t_config *config, const unsigned char *packet)
+static void	check_packet(t_config *config, t_host *host, int src_port,
+		int dst_port, struct tcphdr *tcp)
+{
+	const char	*res;
+
+	if (dst_port == 54321)
+	{
+		printf("[DEBUG] Packet arrived at my source port!\n");
+		fflush(stdout);
+		for (int i = 0; i < host->ports_count; i++)
+		{
+			if (host->ports_list[i] == src_port)
+			{
+				printf("[DEBUG] Matching host port: %d\n", src_port);
+				fflush(stdout);
+				for (int s = 0; s < INDEX_COUNT; s++)
+				{
+					res = tcp_scan_result(tcp, s);
+					if (res)
+					{
+						printf("[DEBUG] Scan index %d result: %s\n", s, res);
+						fflush(stdout);
+						pthread_mutex_lock(&config->result_mutex);
+						host->result[i].scan_results[s] = (char *)res;
+						pthread_mutex_unlock(&config->result_mutex);
+					}
+				}
+			}
+		}
+	}
+}
+
+static void	check_protocols(t_config *config, t_host *host, struct iphdr *iph,
+		const unsigned char *packet)
+{
+	struct tcphdr	*tcp;
+	struct udphdr	*udp;
+	int				src_port;
+	int				dst_port;
+
+	if (iph->protocol == IPPROTO_TCP)
+	{
+		tcp = (struct tcphdr *)(packet + iph->ihl * 4);
+		src_port = ntohs(tcp->source);
+		dst_port = ntohs(tcp->dest);
+		printf("[DEBUG] TCP packet: src_port=%d dst_port=%d\n", src_port,
+				dst_port);
+		fflush(stdout);
+		check_packet(config, host, src_port, dst_port, tcp);
+	}
+	else if (iph->protocol == IPPROTO_UDP)
+	{
+		udp = (struct udphdr *)(packet + iph->ihl * 4);
+		src_port = ntohs(udp->source);
+		dst_port = ntohs(udp->dest);
+		check_packet(config, host, src_port, dst_port, NULL);
+	}
+}
+
+static void	handle_packet(t_config *config, const unsigned char *packet)
 {
 	struct iphdr	*iph;
 	char			src_ip[INET_ADDRSTRLEN];
 	char			dst_ip[INET_ADDRSTRLEN];
-	int				src_port;
-	int				dst_port;
 	t_host			*host;
-	struct tcphdr	*tcp;
-	struct udphdr	*udp;
-	const char		*res;
 
 	iph = (struct iphdr *)packet;
 	inet_ntop(AF_INET, &iph->saddr, src_ip, sizeof(src_ip));
@@ -45,54 +102,7 @@ void	handle_packet(t_config *config, const unsigned char *packet)
 	for (int h = 0; h < config->hosts_count; h++)
 	{
 		host = &config->hosts[h];
-		if (iph->protocol == IPPROTO_TCP)
-		{
-			tcp = (struct tcphdr *)(packet + iph->ihl * 4);
-			src_port = ntohs(tcp->source);
-			dst_port = ntohs(tcp->dest);
-			printf("[DEBUG] TCP packet: src_port=%d dst_port=%d\n", src_port,
-					dst_port);
-			fflush(stdout);
-			if (dst_port == 54321)
-			{
-				printf("[DEBUG] Packet arrived at my source port!\n");
-				fflush(stdout);
-				for (int i = 0; i < host->ports_count; i++)
-				{
-					if (host->ports_list[i] == src_port)
-					{
-						printf("[DEBUG] Matching host port: %d\n", src_port);
-						fflush(stdout);
-						for (int s = 0; s < INDEX_COUNT; s++)
-						{
-							res = tcp_scan_result(tcp, s);
-							if (res)
-							{
-								printf("[DEBUG] Scan index %d result: %s\n", s,
-										res);
-								fflush(stdout);
-								pthread_mutex_lock(&config->result_mutex);
-								host->result[i].scan_results[s] = (char *)res;
-								pthread_mutex_unlock(&config->result_mutex);
-							}
-						}
-					}
-				}
-			}
-		}
-		else if (iph->protocol == IPPROTO_UDP)
-		{
-			udp = (struct udphdr *)(packet + iph->ihl * 4);
-			src_port = ntohs(udp->source);
-			for (int i = 0; i < host->ports_count; i++)
-			{
-				if (host->ports_list[i] != src_port)
-					continue ;
-				pthread_mutex_lock(&config->result_mutex);
-				host->result[i].scan_results[INDEX_UDP] = SCAN_OPEN_FILTERED;
-				pthread_mutex_unlock(&config->result_mutex);
-			}
-		}
+		check_protocols(config, host, iph, packet);
 	}
 }
 
@@ -122,7 +132,8 @@ static void	packet_handler(unsigned char *user, const struct pcap_pkthdr *h,
 	handle_packet(config, packet);
 }
 
-int	build_filter(pcap_t *handle, struct bpf_program *fp, bpf_u_int32 *netmask)
+static int	build_filter(pcap_t *handle, struct bpf_program *fp,
+		bpf_u_int32 *netmask)
 {
 	char	filter[1024];
 
@@ -159,7 +170,6 @@ void	*thread_listener(void *arg)
 		fprintf(stderr, "Error lookupnet: %s\n", errbuf);
 		return (NULL);
 	}
-	// TODO: changer DEFAULT_IFACE par une fonction get_interface;
 	handle = pcap_open_live(iface, BUFSIZ, 1, 1000, errbuf);
 	if (!handle)
 	{
