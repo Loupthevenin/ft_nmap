@@ -21,7 +21,7 @@ static const char	*scan_result(struct tcphdr *tcp, int scan_index)
 				&& !tcp->syn) ? (tcp->rst ? SCAN_UNFILTERED : SCAN_FILTERED) : NULL);
 	// TODO: revoir la logique pour udp sur open
 	case INDEX_UDP:
-		return (SCAN_OPEN);
+		return (!tcp ? SCAN_OPEN : NULL);
 	default:
 		return (NULL);
 	}
