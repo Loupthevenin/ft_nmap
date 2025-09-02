@@ -294,6 +294,15 @@ void	print_results(t_config *config)
 	}
 }
 
+void	print_timer(struct timespec *start, struct timespec *end)
+{
+	double	elapsed;
+
+	elapsed = (end->tv_sec - start->tv_sec) + (end->tv_nsec - start->tv_nsec)
+		/ 1e9;
+	printf("\nft_nmap done: %.2f seconds\n", elapsed);
+}
+
 // Free
 void	free_config(t_config *config)
 {

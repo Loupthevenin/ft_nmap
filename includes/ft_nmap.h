@@ -149,6 +149,7 @@ long				get_now_ms(void);
 void				print_help(void);
 void				print_config(const t_config *config);
 void				print_results(t_config *config);
+void				print_timer(struct timespec *start, struct timespec *end);
 void				free_config(t_config *config);
 
 #endif

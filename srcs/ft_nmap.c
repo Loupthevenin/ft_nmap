@@ -187,7 +187,9 @@ static void	run_scan(t_config *config)
 
 int	main(int argc, char **argv)
 {
-	t_config	config;
+	t_config		config;
+	struct timespec	start_time;
+	struct timespec	end_time;
 
 	if (parse_args(&config, argc, argv) == -1)
 	{
@@ -203,8 +205,11 @@ int	main(int argc, char **argv)
 	allocate_results_for_hosts(&config);
 	print_config(&config);
 	printf("\nStarting ft_nmap scan...\n");
+	clock_gettime(CLOCK_MONOTONIC, &start_time);
 	run_scan(&config);
+	clock_gettime(CLOCK_MONOTONIC, &end_time);
 	print_results(&config);
+	print_timer(&start_time, &end_time);
 	free_config(&config);
 	return (0);
 }
