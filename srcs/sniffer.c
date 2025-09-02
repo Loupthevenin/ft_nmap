@@ -1,6 +1,5 @@
 #include "../includes/ft_nmap.h"
 
-// TODO: revoir toutes les verifs pour les scans;
 static const char	*scan_result(struct tcphdr *tcp, int scan_index)
 {
 	if (!tcp && scan_index != INDEX_UDP)
@@ -8,22 +7,39 @@ static const char	*scan_result(struct tcphdr *tcp, int scan_index)
 	switch (scan_index)
 	{
 	case INDEX_SYN:
-		return (tcp->syn
-			&& tcp->ack) ? SCAN_OPEN : (tcp->rst ? SCAN_CLOSED : NULL);
+		if (tcp->syn && tcp->ack)
+			return (SCAN_OPEN);
+		if (tcp->rst)
+			return (SCAN_CLOSED);
+		return (NULL);
 	case INDEX_FIN:
-		return ((tcp->fin && !tcp->syn && !tcp->rst && !tcp->psh && !tcp->ack
-				&& !tcp->urg) ? (tcp->rst ? SCAN_CLOSED : SCAN_OPEN_FILTERED) : NULL);
+		if (tcp->rst)
+			return (SCAN_CLOSED);
+		else if (tcp->fin && !tcp->syn && !tcp->ack && !tcp->psh && !tcp->urg)
+			return (SCAN_OPEN_FILTERED);
+		return (NULL);
 	case INDEX_NULL:
-		return ((!tcp->fin && !tcp->syn && !tcp->rst && !tcp->psh && !tcp->ack
-				&& !tcp->urg) ? (tcp->rst ? SCAN_CLOSED : SCAN_OPEN_FILTERED) : NULL);
+		if (tcp->rst)
+			return (SCAN_CLOSED);
+		if (!tcp->fin && !tcp->syn && !tcp->rst && !tcp->psh && !tcp->ack
+			&& !tcp->urg)
+			return (SCAN_OPEN_FILTERED);
+		return (NULL);
 	case INDEX_XMAS:
-		return ((tcp->fin && tcp->psh
-				&& tcp->urg) ? (tcp->rst ? SCAN_CLOSED : SCAN_OPEN_FILTERED) : NULL);
+		if (tcp->rst)
+			return (SCAN_CLOSED);
+		if (tcp->fin && tcp->psh && tcp->urg)
+			return (SCAN_OPEN_FILTERED);
+		return (NULL);
 	case INDEX_ACK:
-		return (tcp->rst ? SCAN_UNFILTERED : SCAN_FILTERED);
+		if (tcp->rst)
+			return (SCAN_UNFILTERED);
+		return (SCAN_FILTERED);
 	// TODO: revoir la logique pour udp sur open
 	case INDEX_UDP:
-		return (!tcp ? SCAN_OPEN : NULL);
+		if (!tcp)
+			return (SCAN_OPEN);
+		return (SCAN_FILTERED);
 	default:
 		return (NULL);
 	}
@@ -146,6 +162,7 @@ static void	handle_packet(t_config *config, const unsigned char *packet)
 	}
 }
 
+// TODO: print timer;
 static void	packet_handler(unsigned char *user, const struct pcap_pkthdr *h,
 		const unsigned char *bytes)
 {
@@ -212,7 +229,7 @@ void	*thread_listener(void *arg)
 	larg = (t_listener_arg *)arg;
 	config = larg->config;
 	netmask = PCAP_NETMASK_UNKNOWN;
-	handle = pcap_open_live("any", BUFSIZ, 1, 1000, errbuf);
+	handle = pcap_open_live("any", BUFSIZ, 1, 50, errbuf);
 	if (!handle)
 	{
 		fprintf(stderr, "error: pcap_open_live failed: %s\n", errbuf);
