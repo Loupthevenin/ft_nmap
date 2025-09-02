@@ -1,6 +1,5 @@
 #include "../includes/ft_nmap.h"
 
-// TODO: peut-etre changer : init a null et le set a close dans le sniffer si pas de réponse;
 static void	init_scan_results(t_result *res, int scans)
 {
 	for (int i = 0; i < INDEX_COUNT; i++)
@@ -99,11 +98,9 @@ static void	wait_for_timeout(t_config *config, t_listener_arg *larg,
 		pthread_t *listener)
 {
 	pcap_t	*handle;
-	long	start_time;
 	long	now;
 	long	last_packet_time;
 
-	start_time = get_now_ms();
 	while (1)
 	{
 		pthread_mutex_lock(&larg->handle_mutex);
@@ -113,9 +110,7 @@ static void	wait_for_timeout(t_config *config, t_listener_arg *larg,
 		last_packet_time = config->last_packet_time;
 		pthread_mutex_unlock(&config->packet_time_mutex);
 		now = get_now_ms();
-		if (last_packet_time != -1 && now - last_packet_time >= TIMEOUT)
-			break ;
-		if (last_packet_time == -1 && now - start_time >= MAX_WAIT)
+		if (now - last_packet_time >= TIMEOUT)
 			break ;
 		usleep(100000);
 	}

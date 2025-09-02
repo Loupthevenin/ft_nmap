@@ -33,8 +33,7 @@
 # define SCAN_UNFILTERED "unfiltered"
 # define SCAN_OPEN_FILTERED "open|filtered"
 
-# define TIMEOUT 500
-# define MAX_WAIT 5000
+# define TIMEOUT 300
 
 typedef enum e_scan_type
 {
