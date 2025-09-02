@@ -75,6 +75,16 @@ int	get_datalink_offset(pcap_t *handle)
 	}
 }
 
+const char	*get_service_name(int port, const char *proto)
+{
+	struct servent	*se;
+
+	se = getservbyport(htons(port), proto);
+	if (se)
+		return (se->s_name);
+	return ("unknown");
+}
+
 size_t	ft_strlcat(char *dst, const char *src, size_t dstsize)
 {
 	size_t	i;

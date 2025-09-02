@@ -144,6 +144,7 @@ int					create_udp_packet(char *buff, const char *src_ip,
 size_t				ft_strlcat(char *dst, const char *src, size_t dstsize);
 int					get_local_ip(char *buffer, size_t buflen);
 int					get_datalink_offset(pcap_t *handle);
+const char			*get_service_name(int port, const char *proto);
 unsigned short		cksum(unsigned short *buf, int n);
 long				get_now_ms(void);
 void				print_help(void);
