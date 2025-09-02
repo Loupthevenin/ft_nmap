@@ -1,7 +1,10 @@
 #include "../includes/ft_nmap.h"
 
+// TODO: revoir toutes les verifs pour les scans;
 static const char	*scan_result(struct tcphdr *tcp, int scan_index)
 {
+	if (!tcp && scan_index != INDEX_UDP)
+		return (NULL);
 	switch (scan_index)
 	{
 	case INDEX_SYN:
@@ -17,14 +20,23 @@ static const char	*scan_result(struct tcphdr *tcp, int scan_index)
 		return ((tcp->fin && tcp->psh
 				&& tcp->urg) ? (tcp->rst ? SCAN_CLOSED : SCAN_OPEN_FILTERED) : NULL);
 	case INDEX_ACK:
-		return ((tcp->ack
-				&& !tcp->syn) ? (tcp->rst ? SCAN_UNFILTERED : SCAN_FILTERED) : NULL);
+		return (tcp->rst ? SCAN_UNFILTERED : SCAN_FILTERED);
 	// TODO: revoir la logique pour udp sur open
 	case INDEX_UDP:
 		return (!tcp ? SCAN_OPEN : NULL);
 	default:
 		return (NULL);
 	}
+}
+
+static int	is_scanned_host(t_config *config, const char *ip)
+{
+	for (int i = 0; i < config->hosts_count; i++)
+	{
+		if (strcmp(config->hosts[i].ip, ip) == 0)
+			return (1);
+	}
+	return (0);
 }
 
 static void	update_last_packet_time(t_config *config)
@@ -51,6 +63,9 @@ static void	check_packet(t_config *config, t_host *host, int src_port,
 				fflush(stdout);
 				for (int s = 0; s < INDEX_COUNT; s++)
 				{
+					// Ne traiter que les scans set
+					if (!(config->scans & (1 << s)))
+						continue ;
 					res = scan_result(tcp, s);
 					if (res)
 					{
@@ -121,6 +136,9 @@ static void	handle_packet(t_config *config, const unsigned char *packet)
 	printf("[DEBUG] IP packet received: src=%s dst=%s proto=%d\n", src_ip,
 			dst_ip, iph->protocol);
 	fflush(stdout);
+	// Ignore packets not coming from scanned hosts
+	if (!is_scanned_host(config, src_ip))
+		return ;
 	for (int h = 0; h < config->hosts_count; h++)
 	{
 		host = &config->hosts[h];
@@ -155,11 +173,22 @@ static void	packet_handler(unsigned char *user, const struct pcap_pkthdr *h,
 }
 
 static int	build_filter(pcap_t *handle, struct bpf_program *fp,
-		bpf_u_int32 *netmask)
+		bpf_u_int32 *netmask, t_config *config)
 {
-	char	filter[1024];
+	char	filter[2048];
+	char	hosts[1024];
 
-	snprintf(filter, sizeof(filter), "ip");
+	hosts[0] = '\0';
+	for (int i = 0; i < config->hosts_count; i++)
+	{
+		if (i)
+			ft_strlcat(hosts, " or ", sizeof(hosts));
+		ft_strlcat(hosts, "src host ", sizeof(hosts));
+		ft_strlcat(hosts, config->hosts[i].ip, sizeof(hosts));
+	}
+	snprintf(filter, sizeof(filter), "(%s) and (tcp or udp or icmp or icmp6)",
+			hosts[0] ? hosts : "ip");
+	printf("filter: %s\n", filter);
 	if (pcap_compile(handle, fp, filter, 0, *netmask) == -1 ||
 		pcap_setfilter(handle, fp) == -1)
 	{
@@ -179,20 +208,11 @@ void	*thread_listener(void *arg)
 	struct bpf_program	fp;
 	int					offset;
 	bpf_u_int32			netmask;
-	bpf_u_int32			mask;
-	const char			*iface;
 
 	larg = (t_listener_arg *)arg;
 	config = larg->config;
-	// TODO: prendre en compte le localhost donc rendre l'interface dynamique en fonction des plages d'ips;
-	iface = get_interface(config->hosts[0].ip);
-	printf("interface : %s\n", iface);
-	if (pcap_lookupnet(iface, &netmask, &mask, errbuf) == -1)
-	{
-		fprintf(stderr, "Error lookupnet: %s\n", errbuf);
-		return (NULL);
-	}
-	handle = pcap_open_live(iface, BUFSIZ, 1, 1000, errbuf);
+	netmask = PCAP_NETMASK_UNKNOWN;
+	handle = pcap_open_live("any", BUFSIZ, 1, 1000, errbuf);
 	if (!handle)
 	{
 		fprintf(stderr, "error: pcap_open_live failed: %s\n", errbuf);
@@ -200,12 +220,12 @@ void	*thread_listener(void *arg)
 	}
 	pthread_mutex_lock(&larg->handle_mutex);
 	larg->handle = handle;
-	offset = get_datalink_offset(handle);
 	pthread_mutex_unlock(&larg->handle_mutex);
+	offset = get_datalink_offset(handle);
 	if (offset < 0)
 		return (NULL);
 	config->datalink_offset = offset;
-	if (build_filter(handle, &fp, &netmask) == -1)
+	if (build_filter(handle, &fp, &netmask, config) == -1)
 	{
 		fprintf(stderr, "error: build_filter failed\n");
 		return (NULL);

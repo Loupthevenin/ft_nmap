@@ -67,59 +67,32 @@ int	get_datalink_offset(pcap_t *handle)
 		return (4);
 	case DLT_RAW:
 		return (0);
+	case DLT_LINUX_SLL:
+		return (16);
 	default:
 		fprintf(stderr, "Unsupported datalink type: %d\n", dl_type);
 		return (-1);
 	}
 }
 
-const char	*get_interface(const char *target_ip)
+size_t	ft_strlcat(char *dst, const char *src, size_t dstsize)
 {
-	static char			iface_name[128];
-	uint32_t			target;
-	struct sockaddr_in	*addr;
-	struct sockaddr_in	*mask;
+	size_t	i;
+	size_t	len_src;
+	size_t	len_dst;
 
-	struct ifaddrs *ifaddr, *ifa;
-	target = inet_addr(target_ip);
-	if (getifaddrs(&ifaddr) == -1)
+	len_src = strlen(src);
+	len_dst = strlen(dst);
+	if (dstsize <= len_dst)
+		return (len_src + dstsize);
+	i = 0;
+	while (src[i] != '\0' && (len_dst + i) < (dstsize - 1))
 	{
-		perror("getifaddrs");
-		return ("eth0"); // fallback
+		dst[len_dst + i] = src[i];
+		i++;
 	}
-	for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
-	{
-		if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET)
-			continue ;
-		// skip loopback
-		if (strcmp(ifa->ifa_name, "lo") == 0)
-			continue ;
-		addr = (struct sockaddr_in *)ifa->ifa_addr;
-		mask = (struct sockaddr_in *)ifa->ifa_netmask;
-		// vérifier si la cible est dans le même subnet
-		if (mask
-			&& ((addr->sin_addr.s_addr & mask->sin_addr.s_addr) == (target & mask->sin_addr.s_addr)))
-		{
-			strncpy(iface_name, ifa->ifa_name, sizeof(iface_name) - 1);
-			iface_name[sizeof(iface_name) - 1] = 0;
-			freeifaddrs(ifaddr);
-			return (iface_name);
-		}
-	}
-	// si pas dans le même subnet, retourner la première interface active
-	for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
-	{
-		if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET)
-			continue ;
-		if (strcmp(ifa->ifa_name, "lo") == 0)
-			continue ;
-		strncpy(iface_name, ifa->ifa_name, sizeof(iface_name) - 1);
-		iface_name[sizeof(iface_name) - 1] = 0;
-		freeifaddrs(ifaddr);
-		return (iface_name);
-	}
-	freeifaddrs(ifaddr);
-	return ("eth0"); // fallback ultime
+	dst[len_dst + i] = '\0';
+	return (len_dst + len_src);
 }
 
 long	get_now_ms(void)
