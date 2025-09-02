@@ -474,5 +474,6 @@ int	parse_args(t_config *config, int argc, char **argv)
 		config->scans = SCAN_ALL;
 	if (config->hosts_count == 0 && config->ip)
 		add_host(config, config->ip);
+	config->last_packet_time = -1;
 	return (0);
 }

@@ -297,6 +297,11 @@ void	print_results(t_config *config)
 // Free
 void	free_config(t_config *config)
 {
+	t_host		*host;
+	t_result	*res;
+
+	if (!config)
+		return ;
 	if (config->ports)
 		free(config->ports);
 	if (config->ports_list)
@@ -307,18 +312,36 @@ void	free_config(t_config *config)
 		free(config->file);
 	if (config->scan_type)
 		free(config->scan_type);
-}
-
-void	free_results(t_result *results, int count)
-{
-	if (!results)
-		return ;
-	for (int i = 0; i < count; i++)
+	if (config->ips_list)
 	{
-		free(results[i].service);
-		free(results[i].conclusion);
-		for (int j = 0; j < 6; j++)
-			free(results[i].scan_results[j]);
+		for (int i = 0; i < config->ips_count; i++)
+			free(config->ips_list[i]);
+		free(config->ips_list);
 	}
-	free(results);
+	if (config->hosts)
+	{
+		for (int h = 0; h < config->hosts_count; h++)
+		{
+			host = &config->hosts[h];
+			if (host->hostname)
+				free(host->hostname);
+			if (host->ip)
+				free(host->ip);
+			if (host->ports_list)
+				free(host->ports_list);
+			if (host->result)
+			{
+				for (int p = 0; p < host->ports_count; p++)
+				{
+					res = &host->result[p];
+					if (res->service)
+						free(res->service);
+					if (res->conclusion)
+						free(res->conclusion);
+				}
+				free(host->result);
+			}
+		}
+		free(config->hosts);
+	}
 }
