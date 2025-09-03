@@ -78,6 +78,19 @@ static int	set_socket(void)
 	return (sock);
 }
 
+static int	set_socket_udp(void)
+{
+	int	sock;
+
+	sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock < 0)
+	{
+		perror("socket");
+		return (-1);
+	}
+	return (sock);
+}
+
 static t_listener_arg	*create_listener(pthread_t *listener, t_config *config)
 {
 	t_listener_arg	*larg;
@@ -120,7 +133,7 @@ static void	wait_for_timeout(t_config *config, t_listener_arg *larg,
 	pcap_close(handle);
 }
 
-static void	create_sender(int sock, t_config *config)
+static void	create_sender(int sock_tcp, int sock_udp, t_config *config)
 {
 	pthread_t		*threads;
 	t_thread_arg	*targ;
@@ -150,7 +163,8 @@ static void	create_sender(int sock, t_config *config)
 			targ = malloc(sizeof(t_thread_arg));
 			targ->config = config;
 			targ->host = host;
-			targ->sock = sock;
+			targ->sock_tcp = sock_tcp;
+			targ->sock_udp = sock_udp;
 			targ->port_start = start;
 			targ->port_end = end;
 			pthread_create(&threads[active_threads], NULL, thread_send, targ);
@@ -164,19 +178,28 @@ static void	create_sender(int sock, t_config *config)
 
 static void	run_scan(t_config *config)
 {
-	int				sock;
+	int				sock_tcp;
+	int				sock_udp;
 	pthread_t		listener;
 	t_listener_arg	*larg;
 
+	sock_tcp = -1;
+	sock_udp = -1;
 	get_local_ip(config->local_ip, sizeof(config->local_ip));
 	printf("local_ip: %s\n", config->local_ip);
 	larg = create_listener(&listener, config);
 	if (!larg)
 		return ;
 	usleep(100000);
-	sock = set_socket();
-	create_sender(sock, config);
-	close(sock);
+	if (config->scans & (SCAN_SYN | SCAN_NULL | SCAN_ACK | SCAN_XMAS | SCAN_FIN))
+		sock_tcp = set_socket();
+	if (config->scans & SCAN_UDP)
+		sock_udp = set_socket_udp();
+	create_sender(sock_tcp, sock_udp, config);
+	if (sock_tcp > 0)
+		close(sock_tcp);
+	if (sock_udp > 0)
+		close(sock_udp);
 	wait_for_timeout(config, larg, &listener);
 	// TODO: fonction de cleanup
 	pthread_mutex_destroy(&larg->handle_mutex);

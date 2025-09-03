@@ -35,11 +35,6 @@ static const char	*scan_result(struct tcphdr *tcp, int scan_index)
 		if (tcp->rst)
 			return (SCAN_UNFILTERED);
 		return (SCAN_FILTERED);
-	// TODO: revoir la logique pour udp sur open
-	case INDEX_UDP:
-		if (!tcp)
-			return (SCAN_OPEN);
-		return (SCAN_FILTERED);
 	default:
 		return (NULL);
 	}
@@ -103,6 +98,8 @@ static void	check_protocols(t_config *config, t_host *host, struct iphdr *iph,
 	struct tcphdr	*tcp;
 	struct udphdr	*udp;
 	struct icmphdr	*icmp;
+	struct iphdr	*orig_iph;
+	struct udphdr	*orig_udp;
 	int				src_port;
 	int				dst_port;
 
@@ -122,18 +119,64 @@ static void	check_protocols(t_config *config, t_host *host, struct iphdr *iph,
 		udp = (struct udphdr *)(packet + iph->ihl * 4);
 		src_port = ntohs(udp->source);
 		dst_port = ntohs(udp->dest);
-		check_packet(config, host, src_port, dst_port, NULL);
+		for (int i = 0; i < host->ports_count; i++)
+		{
+			if (host->ports_list[i] == src_port)
+			{
+				pthread_mutex_lock(&config->result_mutex);
+				host->result[i].scan_results[INDEX_UDP] = SCAN_OPEN;
+				pthread_mutex_unlock(&config->result_mutex);
+			}
+		}
 		update_last_packet_time(config);
 	}
 	else if (iph->protocol == IPPROTO_ICMP)
 	{
-		// TODO: implement icmp;
 		icmp = (struct icmphdr *)(packet + iph->ihl * 4);
 		printf("[DEBUG] ICMP packet: type=%d code=%d\n", icmp->type,
 				icmp->code);
 		fflush(stdout);
-		if (icmp->type == 3)
+		if (icmp->type == 3 && icmp->code == 3)
 		{
+			orig_iph = (struct iphdr *)((unsigned char *)icmp
+					+ sizeof(struct icmphdr));
+			if (orig_iph->protocol == IPPROTO_UDP)
+			{
+				orig_udp = (struct udphdr *)((unsigned char *)orig_iph
+						+ orig_iph->ihl * 4);
+				src_port = ntohs(orig_udp->source);
+				dst_port = ntohs(orig_udp->dest);
+				for (int i = 0; i < host->ports_count; i++)
+				{
+					if (host->ports_list[i] == dst_port)
+					{
+						pthread_mutex_lock(&config->result_mutex);
+						host->result[i].scan_results[INDEX_UDP] = SCAN_CLOSED;
+						pthread_mutex_unlock(&config->result_mutex);
+					}
+				}
+			}
+		}
+		else if (icmp->type == 3 && (icmp->code == 1 || icmp->code == 2
+					|| icmp->code == 9 || icmp->code == 10 || icmp->code == 13))
+		{
+			orig_iph = (struct iphdr *)((unsigned char *)icmp
+					+ sizeof(struct icmphdr));
+			if (orig_iph->protocol == IPPROTO_UDP)
+			{
+				orig_udp = (struct udphdr *)((unsigned char *)orig_iph
+						+ orig_iph->ihl * 4);
+				dst_port = ntohs(orig_udp->dest);
+				for (int i = 0; i < host->ports_count; i++)
+				{
+					if (host->ports_list[i] == dst_port)
+					{
+						pthread_mutex_lock(&config->result_mutex);
+						host->result[i].scan_results[INDEX_UDP] = SCAN_FILTERED;
+						pthread_mutex_unlock(&config->result_mutex);
+					}
+				}
+			}
 		}
 		update_last_packet_time(config);
 	}
@@ -162,7 +205,6 @@ static void	handle_packet(t_config *config, const unsigned char *packet)
 	}
 }
 
-// TODO: print timer;
 static void	packet_handler(unsigned char *user, const struct pcap_pkthdr *h,
 		const unsigned char *bytes)
 {
@@ -247,7 +289,8 @@ void	*thread_listener(void *arg)
 		fprintf(stderr, "error: build_filter failed\n");
 		return (NULL);
 	}
-	if (pcap_loop(handle, -1, packet_handler, (unsigned char *)config) == -1)
+	if (pcap_loop(handle, -1, packet_handler, (unsigned char *)config) ==
+		-1)
 		fprintf(stderr, "pcap_loop error: %s\n", pcap_geterr(handle));
 	pcap_freecode(&fp);
 	return (NULL);

@@ -105,7 +105,8 @@ typedef struct s_thread_arg
 {
 	t_config		*config;
 	t_host			*host;
-	int				sock;
+	int				sock_tcp;
+	int				sock_udp;
 	int				port_start;
 	int				port_end;
 }					t_thread_arg;
