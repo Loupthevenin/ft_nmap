@@ -291,6 +291,7 @@ void	print_results(t_config *config)
 			if (!is_open)
 			{
 				printf("%-5d %-20s ", res->port,
+					    res->proto ? res->proto : "?", 
 						res->service ? res->service : "Unassigned");
 				for (int j = 0; j < INDEX_COUNT; j++)
 				{
@@ -353,10 +354,20 @@ void	free_config(t_config *config)
 				for (int p = 0; p < host->ports_count; p++)
 				{
 					res = &host->result[p];
+
 					if (res->service)
 						free(res->service);
+					if (res->proto)
+ 						free(res->proto); 
 					if (res->conclusion)
 						free(res->conclusion);
+
+					for (int j = 0; j < INDEX_COUNT; j++)
+					{
+						if (res->scan_results[j])
+							free(res->scan_results[j]);
+					}
+
 				}
 				free(host->result);
 			}

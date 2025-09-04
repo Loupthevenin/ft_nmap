@@ -61,6 +61,7 @@ typedef struct s_result
 {
 	int				port;
 	char			*service;
+	char  *proto;        // "tcp" ou "udp"
 	char			*scan_results[INDEX_COUNT];
 	char			*conclusion;
 }					t_result;

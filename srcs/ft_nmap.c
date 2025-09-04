@@ -51,7 +51,14 @@ static void	allocate_results_for_hosts(t_config *config)
 		{
 			host->ports_list[i] = config->ports_list[i];
 			host->result[i].port = config->ports_list[i];
-			host->result[i].service = NULL;
+
+			// TODO - Vraiment besoin du proto ? 
+			if (config->scans & SCAN_UDP)
+                host->result[i].proto = strdup("udp");
+            else
+                host->result[i].proto = strdup("tcp");
+
+ 			host->result[i].service = strdup(get_service_name(host->result[i].port, host->result[i].proto));
 			init_scan_results(&host->result[i], config->scans);
 		}
 	}
