@@ -277,6 +277,73 @@ char	**parse_ips_from_file(const char *filename, int *count)
 	return (ips);
 }
 
+
+// Fill ips in the structure t_host for ips_list and ips_count (new method)
+int	fill_ips_from_file(t_config *config, const char *filename)
+{
+	FILE *file;
+	char line[INET_ADDRSTRLEN];
+	char *ip;
+	t_host *new_hosts;
+	int count = 0;
+
+	if (!config || !filename)
+		return 0;
+
+	file = fopen(filename, "r");
+	if (!file)
+	{
+		fprintf(stderr, "Error: Cannot open file '%s'\n", filename);
+		return 0;
+	}
+
+	while (fgets(line, sizeof(line), file))
+	{
+		line[strcspn(line, "\n")] = 0; // remove newline
+		if (strlen(line) == 0)
+			continue;
+
+		if (!is_valid_ip(line))
+		{
+			printf("Warning: Skipping invalid IP '%s'\n", line);
+			continue;
+		}
+
+		new_hosts = realloc(config->hosts, sizeof(t_host) * (config->hosts_count + 1));
+		if (!new_hosts)
+		{
+			fprintf(stderr, "Error: Memory allocation failed\n");
+			fclose(file);
+			return 0;
+		}
+		config->hosts = new_hosts;
+
+		// Initialisation du nouveau host
+		ip = strdup(line);
+		if (!ip)
+		{
+			fprintf(stderr, "Error: Memory allocation failed\n");
+			fclose(file);
+			return 0;
+		}
+
+		config->hosts[config->hosts_count].hostname = strdup(line);
+		config->hosts[config->hosts_count].ip = ip;
+		config->hosts[config->hosts_count].ports_list = NULL;
+		config->hosts[config->hosts_count].ports_count = 0;
+		config->hosts[config->hosts_count].result = NULL;
+
+		config->hosts_count++;
+		count++;
+	}
+
+	fclose(file);
+	printf("Added %d hosts from file '%s'\n", count, filename);
+	return 1;
+}
+
+
+
 // Parse hosts from file (new method - stores in hosts array)
 static int	parse_hosts_from_file(t_config *config, const char *filename)
 {
@@ -407,7 +474,8 @@ int	parse_args(t_config *config, int argc, char **argv)
 					return (-1);
 				}
 				// Use new host-based method for --file
-				if (!parse_hosts_from_file(config, argv[i + 1]))
+				//	if (!parse_hosts_from_file(config, argv[i + 1]))
+				if (!fill_ips_from_file(config, argv[i + 1]))
 				{
 					fprintf(stderr,
 							"Error: Failed to parse hosts from file '%s'\n",

@@ -132,6 +132,7 @@ typedef struct s_pseudo_tcp
 int					parse_args(t_config *config, int argc, char **argv);
 int					resolve_hostname(const char *hostname, char **ip);
 char				**parse_ips_from_file(const char *filename, int *count);
+int					fill_ips_from_file(t_config *config, const char *filename);
 void				*thread_listener(void *arg);
 void				*thread_send(void *arg);
 
