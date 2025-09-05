@@ -108,9 +108,6 @@ static t_listener_arg	*create_listener(pthread_t *listener, t_config *config)
 	larg->config = config;
 	larg->handle = NULL;
 	pthread_mutex_init(&larg->handle_mutex, NULL);
-	pthread_mutex_init(&config->result_mutex, NULL);
-	pthread_mutex_init(&config->packet_time_mutex, NULL);
-	pthread_mutex_init(&config->sport_mutex, NULL);
 	pthread_create(listener, NULL, &thread_listener, larg);
 	return (larg);
 }

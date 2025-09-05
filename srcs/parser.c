@@ -3,8 +3,13 @@
 // Resolve hostname to IP address
 int	resolve_hostname(const char *hostname, char **ip)
 {
-	struct hostent	*host_entry;
-	struct in_addr	addr;
+	struct addrinfo		hints;
+	struct addrinfo		*res;
+	struct addrinfo		*p;
+	struct in_addr		addr;
+	int					status;
+	char				addrstr[INET_ADDRSTRLEN];
+	struct sockaddr_in	*ipv4;
 
 	// First check if it's already an IP address
 	if (inet_aton(hostname, &addr))
@@ -13,16 +18,33 @@ int	resolve_hostname(const char *hostname, char **ip)
 		return (*ip != NULL);
 	}
 	// Try to resolve hostname
-	host_entry = gethostbyname(hostname);
-	if (host_entry == NULL)
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_INET; // IPv4 only
+	hints.ai_socktype = SOCK_STREAM;
+	if ((status = getaddrinfo(hostname, NULL, &hints, &res)) != 0)
+	{
+		fprintf(stderr, "DNS resolution failed for %s: %s\n", hostname,
+				gai_strerror(status));
 		return (0);
-	*ip = strdup(inet_ntoa(*((struct in_addr *)host_entry->h_addr_list[0])));
-	return (*ip != NULL);
+	}
+	for (p = res; p != NULL; p = p->ai_next)
+	{
+		ipv4 = (struct sockaddr_in *)p->ai_addr;
+		if (inet_ntop(AF_INET, &(ipv4->sin_addr), addrstr, sizeof addrstr))
+		{
+			*ip = strdup(addrstr);
+			freeaddrinfo(res);
+			return (*ip != NULL);
+		}
+	}
+	freeaddrinfo(res);
+	return (0);
 }
 
 // Initialize config structure
 static void	init_config(t_config *config)
 {
+	memset(config, 0, sizeof(t_config));
 	// Legacy fields
 	config->ip = NULL;
 	config->ips_list = NULL;
@@ -39,33 +61,20 @@ static void	init_config(t_config *config)
 	config->scans = 0;
 	config->scan_type = NULL;
 	config->show_help = 0;
+	pthread_mutex_init(&config->result_mutex, NULL);
+	pthread_mutex_init(&config->packet_time_mutex, NULL);
+	pthread_mutex_init(&config->sport_mutex, NULL);
 }
 
 // Validate configuration (supports both legacy and new modes)
 static int	validate_config(t_config *config)
 {
-	int	target_methods;
-
 	// Check if we have any targets (legacy or new format)
 	if (!config->ip && !config->file && config->hosts_count == 0
 		&& config->ips_count == 0)
 	{
 		fprintf(stderr, "Error: No targets specified. Use --ip, --file,"
 						"or hostnames\n");
-		return (-1);
-	}
-	// Check for conflicting options
-	target_methods = 0;
-	if (config->ip)
-		target_methods++;
-	if (config->file)
-		target_methods++;
-	if (config->hosts_count > 0)
-		target_methods++;
-	if (target_methods > 1)
-	{
-		fprintf(stderr, "Error: Cannot mix --ip, --file,"
-						"and hostname arguments\n");
 		return (-1);
 	}
 	if (config->speedup <= 0)
@@ -89,14 +98,6 @@ static int	is_valid_port(const char *port)
 
 	p = atoi(port);
 	return (p > 0 && p <= 65535);
-}
-
-// Check if IP is valid
-static int	is_valid_ip(const char *ip)
-{
-	struct sockaddr_in	sa;
-
-	return (inet_pton(AF_INET, ip, &(sa.sin_addr)) != 0);
 }
 
 // Check if speedup value is valid
@@ -192,6 +193,7 @@ static int	parse_ports(t_config *config, const char *ports_str)
 static int	add_host(t_config *config, const char *hostname)
 {
 	t_host	*new_hosts;
+	t_host	*h;
 	char	*ip;
 
 	// Resolve hostname to IP
@@ -210,11 +212,14 @@ static int	add_host(t_config *config, const char *hostname)
 	}
 	config->hosts = new_hosts;
 	// Initialize new host
-	config->hosts[config->hosts_count].hostname = strdup(hostname);
-	config->hosts[config->hosts_count].ip = ip;
-	config->hosts[config->hosts_count].ports_list = NULL;
-	config->hosts[config->hosts_count].ports_count = 0;
-	if (!config->hosts[config->hosts_count].hostname)
+	h = &config->hosts[config->hosts_count];
+	memset(h, 0, sizeof(t_host));
+	h->hostname = strdup(hostname);
+	h->ip = ip;
+	h->ports_list = NULL;
+	h->ports_count = 0;
+	h->result = NULL;
+	if (!h->hostname)
 	{
 		free(ip);
 		return (0);
@@ -222,59 +227,6 @@ static int	add_host(t_config *config, const char *hostname)
 	config->hosts_count++;
 	printf("Added host: %s -> %s\n", hostname, ip);
 	return (1);
-}
-
-// Parse IPs from file (legacy method - stores in ips_list)
-char	**parse_ips_from_file(const char *filename, int *count)
-{
-	FILE	*file;
-	char	**ips;
-	char	line[INET_ADDRSTRLEN];
-	int		i;
-	char	**tmp;
-
-	ips = NULL;
-	i = 0;
-	file = fopen(filename, "r");
-	if (!file)
-		return (NULL);
-	while (fgets(line, sizeof(line), file))
-	{
-		line[strcspn(line, "\n")] = 0; // remove newline
-		if (strlen(line) == 0)
-			continue ; // skip empty lines
-		if (is_valid_ip(line))
-		{
-			tmp = realloc(ips, sizeof(char *) * (i + 1));
-			if (!tmp)
-			{
-				fclose(file);
-				for (int j = 0; j < i; j++)
-					free(ips[j]);
-				free(ips);
-				return (NULL);
-			}
-			ips = tmp;
-			ips[i] = strdup(line);
-			if (!ips[i])
-			{
-				fclose(file);
-				for (int j = 0; j < i; j++)
-					free(ips[j]);
-				free(ips);
-				return (NULL);
-			}
-			i++;
-		}
-		else
-		{
-			printf("Warning: Skipping invalid IP '%s' in file\n", line);
-		}
-	}
-	fclose(file);
-	*count = i;
-	printf("Parsed %d IPs from file '%s'\n", i, filename);
-	return (ips);
 }
 
 // Parse hosts from file (new method - stores in hosts array)
@@ -329,8 +281,9 @@ static int	add_scan_type(t_config *config, const char *scan)
 // Main argument parser - supports both legacy and new modes
 int	parse_args(t_config *config, int argc, char **argv)
 {
-	int	i;
-	int	speedup;
+	int		i;
+	int		speedup;
+	char	*resolve_ip;
 
 	i = 1;
 	init_config(config);
@@ -372,13 +325,14 @@ int	parse_args(t_config *config, int argc, char **argv)
 					fprintf(stderr, "Error: --ip requires a value\n");
 					return (-1);
 				}
-				if (!is_valid_ip(argv[i + 1]))
+				resolve_ip = NULL;
+				if (!resolve_hostname(argv[i + 1], &resolve_ip))
 				{
-					fprintf(stderr, "Error: Invalid IP address '%s'\n", argv[i
+					fprintf(stderr, "Error: Cannot resolve host '%s'\n", argv[i
 							+ 1]);
 					return (-1);
 				}
-				config->ip = strdup(argv[i + 1]);
+				config->ip = resolve_ip;
 				if (!config->ip)
 				{
 					fprintf(stderr, "Error: Memory allocation failed\n");

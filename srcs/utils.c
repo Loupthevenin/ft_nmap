@@ -233,6 +233,93 @@ void	print_config(const t_config *config)
 		printf("  Show help: No\n");
 }
 
+static int	cmp_ports(const void *a, const void *b)
+{
+	const t_result	*ra;
+	const t_result	*rb;
+
+	ra = (const t_result *)a;
+	rb = (const t_result *)b;
+	return (ra->port - rb->port);
+}
+
+static const char	*get_conclusion(t_result *res)
+{
+	int	has_open;
+	int	has_closed;
+	int	has_filtered;
+	int	has_unfiltered;
+
+	has_open = 0;
+	has_closed = 0;
+	has_filtered = 0;
+	has_unfiltered = 0;
+	for (int j = 0; j < INDEX_COUNT; j++)
+	{
+		if (!res->scan_results[j])
+			continue ;
+		if (strstr(res->scan_results[j], SCAN_OPEN))
+			has_open = 1;
+		if (strstr(res->scan_results[j], SCAN_CLOSED))
+			has_closed = 1;
+		if (strstr(res->scan_results[j], SCAN_FILTERED))
+			has_filtered = 1;
+		if (strstr(res->scan_results[j], SCAN_UNFILTERED))
+			has_unfiltered = 1;
+	}
+	if (has_open)
+	{
+		if (has_filtered)
+			return (SCAN_OPEN_FILTERED);
+		return (SCAN_OPEN);
+	}
+	if (has_closed && !has_filtered && !has_unfiltered)
+		return (SCAN_CLOSED);
+	if (has_filtered)
+		return (SCAN_FILTERED);
+	if (has_unfiltered)
+		return (SCAN_UNFILTERED);
+	return (SCAN_CLOSED);
+}
+
+static void	print_port_results(t_result *res)
+{
+	printf("%-5d %-20s ", res->port,
+			res->service ? res->service : get_service_name(res->port, "tcp"));
+	for (int j = 0; j < INDEX_COUNT; j++)
+	{
+		if (res->scan_results[j])
+		{
+			switch (j)
+			{
+			case INDEX_SYN:
+				printf("SYN(%s) ", res->scan_results[j]);
+				break ;
+			case INDEX_NULL:
+				printf("NULL(%s) ", res->scan_results[j]);
+				break ;
+			case INDEX_FIN:
+				printf("FIN(%s) ", res->scan_results[j]);
+				break ;
+			case INDEX_XMAS:
+				printf("XMAS(%s) ", res->scan_results[j]);
+				break ;
+			case INDEX_ACK:
+				printf("ACK(%s) ", res->scan_results[j]);
+				break ;
+			case INDEX_UDP:
+				printf("UDP(%s) ", res->scan_results[j]);
+				break ;
+			default:
+				break ;
+			}
+		}
+	}
+	if (res->conclusion)
+		printf("%s", res->conclusion);
+	printf("\n");
+}
+
 void	print_results(t_config *config)
 {
 	t_host		*host;
@@ -243,13 +330,15 @@ void	print_results(t_config *config)
 	{
 		host = &config->hosts[h];
 		printf("Results for host %s (%s):\n", host->hostname, host->ip);
+		// Trier les résultats par port
+		qsort(host->result, host->ports_count, sizeof(t_result), cmp_ports);
 		printf("Open ports:\n");
 		printf("Port  Service Name           Results       Conclusion\n");
-		printf("------------------------------------------------------\n");
+		printf("---------------------------------------------------------------------------------------------------\n");
+		// Ports ouverts
 		for (int i = 0; i < host->ports_count; i++)
 		{
 			res = &host->result[i];
-			// Vérifie si une des scans indique ouvert
 			is_open = 0;
 			for (int j = 0; j < INDEX_COUNT; j++)
 			{
@@ -262,19 +351,14 @@ void	print_results(t_config *config)
 			}
 			if (is_open)
 			{
-				printf("%-5d %-20s ", res->port,
-						res->service ? res->service : "Unassigned");
-				for (int j = 0; j < INDEX_COUNT; j++)
-				{
-					if (res->scan_results[j])
-						printf("%s ", res->scan_results[j]);
-				}
-				printf("%s\n", res->conclusion ? res->conclusion : "");
+				res->conclusion = (char *)get_conclusion(res);
+				print_port_results(res);
 			}
 		}
 		printf("\nClosed/Filtered/Unfiltered ports:\n");
 		printf("Port  Service Name           Results       Conclusion\n");
-		printf("------------------------------------------------------\n");
+		printf("---------------------------------------------------------------------------------------------------\n");
+		// Ports non ouverts
 		for (int i = 0; i < host->ports_count; i++)
 		{
 			res = &host->result[i];
@@ -290,14 +374,8 @@ void	print_results(t_config *config)
 			}
 			if (!is_open)
 			{
-				printf("%-5d %-20s ", res->port,
-						res->service ? res->service : "Unassigned");
-				for (int j = 0; j < INDEX_COUNT; j++)
-				{
-					if (res->scan_results[j])
-						printf("%s ", res->scan_results[j]);
-				}
-				printf("%s\n", res->conclusion ? res->conclusion : "");
+				res->conclusion = (char *)get_conclusion(res);
+				print_port_results(res);
 			}
 		}
 		printf("\n");
