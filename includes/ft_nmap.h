@@ -151,6 +151,7 @@ const char			*get_service_name(int port, const char *proto);
 unsigned short		cksum(unsigned short *buf, int n);
 long				get_now_ms(void);
 void				print_help(void);
+void				print_header(t_config *config);
 void				print_config(const t_config *config);
 void				print_results(t_config *config);
 void				print_timer(struct timespec *start, struct timespec *end);

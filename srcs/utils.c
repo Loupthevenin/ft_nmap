@@ -125,6 +125,52 @@ void	print_help(void)
 	printf("--scan SYN/NULL/FIN/XMAS/ACK/UDP\n");
 }
 
+static const char	*scan_to_string(int scan_type)
+{
+	if (scan_type & SCAN_SYN)
+		return ("SYN");
+	if (scan_type & SCAN_NULL)
+		return ("NULL");
+	if (scan_type & SCAN_ACK)
+		return ("ACK");
+	if (scan_type & SCAN_FIN)
+		return ("FIN");
+	if (scan_type & SCAN_XMAS)
+		return ("XMAS");
+	if (scan_type & SCAN_UDP)
+		return ("UDP");
+	return (NULL);
+}
+
+void	print_header(t_config *config)
+{
+	int			first;
+	t_scan_type	scan;
+
+	printf("=============================================\n");
+	printf("              Scan Configurations            \n");
+	printf("=============================================\n");
+	for (int h = 0; h < config->hosts_count; h++)
+		printf("Target Ip-Address : %s\n", config->hosts[h].ip);
+	printf("No of Ports to scan : %d\n", config->ports_count);
+	printf("Scans to be performed : ");
+	first = 1;
+	for (int i = 0; i < 6; i++)
+	{
+		scan = (1 << i);
+		if (config->scans & scan)
+		{
+			if (!first)
+				printf(" ");
+			printf("%s", scan_to_string(scan));
+			first = 0;
+		}
+	}
+	printf("\n");
+	printf("No of threads : %d\n", config->speedup);
+	printf("=============================================\n");
+}
+
 static int	cmp_ports(const void *a, const void *b)
 {
 	const t_result	*ra;
