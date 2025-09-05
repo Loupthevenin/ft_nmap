@@ -8,24 +8,31 @@ static void	init_scan_results(t_result *res, int scans)
 		{
 		case INDEX_SYN:
 			res->scan_results[i] = (scans & SCAN_SYN) ? SCAN_FILTERED : NULL;
+			res->sport[i] = 0;
 			break ;
 		case INDEX_NULL:
 			res->scan_results[i] = (scans & SCAN_NULL) ? SCAN_OPEN_FILTERED : NULL;
+			res->sport[i] = 0;
 			break ;
 		case INDEX_ACK:
 			res->scan_results[i] = (scans & SCAN_ACK) ? SCAN_FILTERED : NULL;
+			res->sport[i] = 0;
 			break ;
 		case INDEX_FIN:
 			res->scan_results[i] = (scans & SCAN_FIN) ? SCAN_OPEN_FILTERED : NULL;
+			res->sport[i] = 0;
 			break ;
 		case INDEX_XMAS:
 			res->scan_results[i] = (scans & SCAN_XMAS) ? SCAN_OPEN_FILTERED : NULL;
+			res->sport[i] = 0;
 			break ;
 		case INDEX_UDP:
 			res->scan_results[i] = (scans & SCAN_UDP) ? SCAN_OPEN_FILTERED : NULL;
+			res->sport[i] = 0;
 			break ;
 		default:
 			res->scan_results[i] = NULL;
+			res->sport[i] = 0;
 		}
 		res->conclusion = NULL;
 	}
@@ -103,6 +110,7 @@ static t_listener_arg	*create_listener(pthread_t *listener, t_config *config)
 	pthread_mutex_init(&larg->handle_mutex, NULL);
 	pthread_mutex_init(&config->result_mutex, NULL);
 	pthread_mutex_init(&config->packet_time_mutex, NULL);
+	pthread_mutex_init(&config->sport_mutex, NULL);
 	pthread_create(listener, NULL, &thread_listener, larg);
 	return (larg);
 }
@@ -205,6 +213,7 @@ static void	run_scan(t_config *config)
 	pthread_mutex_destroy(&larg->handle_mutex);
 	pthread_mutex_destroy(&config->result_mutex);
 	pthread_mutex_destroy(&config->packet_time_mutex);
+	pthread_mutex_destroy(&config->sport_mutex);
 	free(larg);
 }
 

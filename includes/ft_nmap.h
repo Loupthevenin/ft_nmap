@@ -62,6 +62,7 @@ typedef struct s_result
 	int				port;
 	char			*service;
 	char			*scan_results[INDEX_COUNT];
+	int				sport[INDEX_COUNT];
 	char			*conclusion;
 }					t_result;
 
@@ -98,6 +99,7 @@ typedef struct s_config
 	long			last_packet_time;
 	pthread_mutex_t result_mutex; // mutex for result
 	pthread_mutex_t	packet_time_mutex;
+	pthread_mutex_t	sport_mutex;
 	int				datalink_offset;
 }					t_config;
 

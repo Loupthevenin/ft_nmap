@@ -57,38 +57,47 @@ static void	update_last_packet_time(t_config *config)
 	pthread_mutex_unlock(&config->packet_time_mutex);
 }
 
-static void	check_packet(t_config *config, t_host *host, int src_port,
-		int dst_port, struct tcphdr *tcp)
+static int	match_sport(t_host *host, int dst_port, int *scan_index)
 {
-	const char	*res;
-
-	if (dst_port == 54321)
+	for (int i = 0; i < host->ports_count; i++)
 	{
-		printf("[DEBUG] Packet arrived at my source port!\n");
-		fflush(stdout);
-		for (int i = 0; i < host->ports_count; i++)
+		for (int s = 0; s < INDEX_COUNT; s++)
 		{
-			if (host->ports_list[i] == src_port)
+			if (host->result[i].sport[s] == dst_port)
 			{
-				printf("[DEBUG] Matching host port: %d\n", src_port);
-				fflush(stdout);
-				for (int s = 0; s < INDEX_COUNT; s++)
-				{
-					// Ne traiter que les scans set
-					if (!(config->scans & (1 << s)))
-						continue ;
-					res = scan_result(tcp, s);
-					if (res)
-					{
-						printf("[DEBUG] Scan index %d result: %s\n", s, res);
-						fflush(stdout);
-						pthread_mutex_lock(&config->result_mutex);
-						host->result[i].scan_results[s] = (char *)res;
-						pthread_mutex_unlock(&config->result_mutex);
-					}
-				}
+				*scan_index = s;
+				return (i); // retourne l'index correspondant
 			}
 		}
+	}
+	return (-1);
+}
+
+static void	check_packet(t_config *config, t_host *host, int dst_port,
+		struct tcphdr *tcp)
+{
+	const char	*res;
+	int			idx;
+	int			scan_idx;
+
+	pthread_mutex_lock(&config->sport_mutex);
+	idx = match_sport(host, dst_port, &scan_idx);
+	pthread_mutex_unlock(&config->sport_mutex);
+	if (idx < 0)
+		return ;
+	printf("[DEBUG] Packet arrived at my source port! (port_idx=%d, "
+			"scan_idx=%d)\n",
+			idx,
+			scan_idx);
+	fflush(stdout);
+	res = scan_result(tcp, scan_idx);
+	if (res)
+	{
+		printf("[DEBUG] Scan index %d result: %s\n", scan_idx, res);
+		fflush(stdout);
+		pthread_mutex_lock(&config->result_mutex);
+		host->result[idx].scan_results[scan_idx] = (char *)res;
+		pthread_mutex_unlock(&config->result_mutex);
 	}
 }
 
@@ -111,7 +120,7 @@ static void	check_protocols(t_config *config, t_host *host, struct iphdr *iph,
 		printf("[DEBUG] TCP packet: src_port=%d dst_port=%d\n", src_port,
 				dst_port);
 		fflush(stdout);
-		check_packet(config, host, src_port, dst_port, tcp);
+		check_packet(config, host, dst_port, tcp);
 		update_last_packet_time(config);
 	}
 	else if (iph->protocol == IPPROTO_UDP)
