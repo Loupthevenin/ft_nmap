@@ -99,16 +99,9 @@ static void	check_packet(t_config *config, t_host *host, int dst_port,
 	pthread_mutex_unlock(&config->sport_mutex);
 	if (idx < 0)
 		return ;
-	printf("[DEBUG] Packet arrived at my source port! (port_idx=%d, "
-			"scan_idx=%d)\n",
-			idx,
-			scan_idx);
-	fflush(stdout);
 	res = scan_result(tcp, scan_idx);
 	if (res)
 	{
-		printf("[DEBUG] Scan index %d result: %s\n", scan_idx, res);
-		fflush(stdout);
 		pthread_mutex_lock(&config->result_mutex);
 		host->result[idx].scan_results[scan_idx] = (char *)res;
 		pthread_mutex_unlock(&config->result_mutex);
@@ -122,8 +115,6 @@ static void	handle_icmp(t_config *config, t_host *host,
 	struct udphdr	*orig_udp;
 	int				dst_port;
 
-	printf("[DEBUG] ICMP packet: type=%d code=%d\n", icmp->type, icmp->code);
-	fflush(stdout);
 	if (icmp->type == 3)
 	{
 		orig_iph = (struct iphdr *)((unsigned char *)icmp
@@ -160,9 +151,6 @@ static void	check_protocols(t_config *config, t_host *host, struct iphdr *iph,
 		tcp = (struct tcphdr *)(packet + iph->ihl * 4);
 		src_port = ntohs(tcp->source);
 		dst_port = ntohs(tcp->dest);
-		printf("[DEBUG] TCP packet: src_port=%d dst_port=%d\n", src_port,
-				dst_port);
-		fflush(stdout);
 		check_packet(config, host, dst_port, tcp);
 		update_last_packet_time(config);
 		break ;
@@ -193,9 +181,6 @@ static void	handle_packet(t_config *config, const unsigned char *packet)
 	iph = (struct iphdr *)packet;
 	inet_ntop(AF_INET, &iph->saddr, src_ip, sizeof(src_ip));
 	inet_ntop(AF_INET, &iph->daddr, dst_ip, sizeof(dst_ip));
-	printf("[DEBUG] IP packet received: src=%s dst=%s proto=%d\n", src_ip,
-			dst_ip, iph->protocol);
-	fflush(stdout);
 	// Ignore packets not coming from scanned hosts
 	if (!is_scanned_host(config, src_ip))
 		return ;
@@ -218,11 +203,6 @@ static void	packet_handler(unsigned char *user, const struct pcap_pkthdr *h,
 	// Decalage header ethernet;
 	packet = bytes + config->datalink_offset;
 	ip_len = h->caplen - config->datalink_offset;
-	printf("[DEBUG] Packet captured: caplen=%u datalink_offset=%d ip_len=%lu\n",
-			h->caplen,
-			config->datalink_offset,
-			ip_len);
-	fflush(stdout);
 	if (sizeof(struct ip) > ip_len)
 	{
 		printf("error packet \n");
@@ -248,7 +228,6 @@ static int	build_filter(pcap_t *handle, struct bpf_program *fp,
 	}
 	snprintf(filter, sizeof(filter), "(%s) and (tcp or udp or icmp or icmp6)",
 			hosts[0] ? hosts : "ip");
-	printf("filter: %s\n", filter);
 	if (pcap_compile(handle, fp, filter, 0, *netmask) == -1 ||
 		pcap_setfilter(handle, fp) == -1)
 	{

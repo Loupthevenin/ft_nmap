@@ -232,7 +232,6 @@ int	main(int argc, char **argv)
 		return (0);
 	}
 	allocate_results_for_hosts(&config);
-	print_config(&config);
 	printf("\nStarting ft_nmap scan...\n");
 	clock_gettime(CLOCK_MONOTONIC, &start_time);
 	run_scan(&config);
