@@ -1,5 +1,19 @@
 #include "../includes/ft_nmap.h"
 
+static void	update_scan_result(t_config *config, t_host *host, int port,
+		int index, const char *status)
+{
+	for (int i = 0; i < host->ports_count; i++)
+	{
+		if (host->ports_list[i] == port)
+		{
+			pthread_mutex_lock(&config->result_mutex);
+			host->result[i].scan_results[index] = status;
+			pthread_mutex_unlock(&config->result_mutex);
+		}
+	}
+}
+
 static const char	*scan_result(struct tcphdr *tcp, int scan_index)
 {
 	if (!tcp && scan_index != INDEX_UDP)
@@ -101,19 +115,48 @@ static void	check_packet(t_config *config, t_host *host, int dst_port,
 	}
 }
 
+static void	handle_icmp(t_config *config, t_host *host,
+		const struct icmphdr *icmp)
+{
+	struct iphdr	*orig_iph;
+	struct udphdr	*orig_udp;
+	int				dst_port;
+
+	printf("[DEBUG] ICMP packet: type=%d code=%d\n", icmp->type, icmp->code);
+	fflush(stdout);
+	if (icmp->type == 3)
+	{
+		orig_iph = (struct iphdr *)((unsigned char *)icmp
+				+ sizeof(struct icmphdr));
+		if (orig_iph->protocol == IPPROTO_UDP)
+		{
+			orig_udp = (struct udphdr *)((unsigned char *)orig_iph
+					+ orig_iph->ihl * 4);
+			dst_port = ntohs(orig_udp->dest);
+			if (icmp->code == 3)
+				update_scan_result(config, host, dst_port, INDEX_UDP,
+						SCAN_CLOSED);
+			else if (icmp->code == 1 || icmp->code == 2 ||
+						icmp->code == 9 || icmp->code == 10 ||
+						icmp->code == 13)
+				update_scan_result(config, host, dst_port, INDEX_UDP,
+						SCAN_FILTERED);
+		}
+	}
+}
+
 static void	check_protocols(t_config *config, t_host *host, struct iphdr *iph,
 		const unsigned char *packet)
 {
 	struct tcphdr	*tcp;
 	struct udphdr	*udp;
 	struct icmphdr	*icmp;
-	struct iphdr	*orig_iph;
-	struct udphdr	*orig_udp;
 	int				src_port;
 	int				dst_port;
 
-	if (iph->protocol == IPPROTO_TCP)
+	switch (iph->protocol)
 	{
+	case IPPROTO_TCP:
 		tcp = (struct tcphdr *)(packet + iph->ihl * 4);
 		src_port = ntohs(tcp->source);
 		dst_port = ntohs(tcp->dest);
@@ -122,72 +165,21 @@ static void	check_protocols(t_config *config, t_host *host, struct iphdr *iph,
 		fflush(stdout);
 		check_packet(config, host, dst_port, tcp);
 		update_last_packet_time(config);
-	}
-	else if (iph->protocol == IPPROTO_UDP)
-	{
+		break ;
+	case IPPROTO_UDP:
 		udp = (struct udphdr *)(packet + iph->ihl * 4);
 		src_port = ntohs(udp->source);
 		dst_port = ntohs(udp->dest);
-		for (int i = 0; i < host->ports_count; i++)
-		{
-			if (host->ports_list[i] == src_port)
-			{
-				pthread_mutex_lock(&config->result_mutex);
-				host->result[i].scan_results[INDEX_UDP] = SCAN_OPEN;
-				pthread_mutex_unlock(&config->result_mutex);
-			}
-		}
+		update_scan_result(config, host, src_port, INDEX_UDP, SCAN_OPEN);
 		update_last_packet_time(config);
-	}
-	else if (iph->protocol == IPPROTO_ICMP)
-	{
+		break ;
+	case IPPROTO_ICMP:
 		icmp = (struct icmphdr *)(packet + iph->ihl * 4);
-		printf("[DEBUG] ICMP packet: type=%d code=%d\n", icmp->type,
-				icmp->code);
-		fflush(stdout);
-		if (icmp->type == 3 && icmp->code == 3)
-		{
-			orig_iph = (struct iphdr *)((unsigned char *)icmp
-					+ sizeof(struct icmphdr));
-			if (orig_iph->protocol == IPPROTO_UDP)
-			{
-				orig_udp = (struct udphdr *)((unsigned char *)orig_iph
-						+ orig_iph->ihl * 4);
-				src_port = ntohs(orig_udp->source);
-				dst_port = ntohs(orig_udp->dest);
-				for (int i = 0; i < host->ports_count; i++)
-				{
-					if (host->ports_list[i] == dst_port)
-					{
-						pthread_mutex_lock(&config->result_mutex);
-						host->result[i].scan_results[INDEX_UDP] = SCAN_CLOSED;
-						pthread_mutex_unlock(&config->result_mutex);
-					}
-				}
-			}
-		}
-		else if (icmp->type == 3 && (icmp->code == 1 || icmp->code == 2
-					|| icmp->code == 9 || icmp->code == 10 || icmp->code == 13))
-		{
-			orig_iph = (struct iphdr *)((unsigned char *)icmp
-					+ sizeof(struct icmphdr));
-			if (orig_iph->protocol == IPPROTO_UDP)
-			{
-				orig_udp = (struct udphdr *)((unsigned char *)orig_iph
-						+ orig_iph->ihl * 4);
-				dst_port = ntohs(orig_udp->dest);
-				for (int i = 0; i < host->ports_count; i++)
-				{
-					if (host->ports_list[i] == dst_port)
-					{
-						pthread_mutex_lock(&config->result_mutex);
-						host->result[i].scan_results[INDEX_UDP] = SCAN_FILTERED;
-						pthread_mutex_unlock(&config->result_mutex);
-					}
-				}
-			}
-		}
+		handle_icmp(config, host, icmp);
 		update_last_packet_time(config);
+		break ;
+	default:
+		break ;
 	}
 }
 

@@ -61,7 +61,7 @@ typedef struct s_result
 {
 	int				port;
 	char			*service;
-	char			*scan_results[INDEX_COUNT];
+	const char		*scan_results[INDEX_COUNT];
 	int				sport[INDEX_COUNT];
 	char			*conclusion;
 }					t_result;
