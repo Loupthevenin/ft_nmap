@@ -226,7 +226,6 @@ static int	add_host(t_config *config, const char *hostname)
 		return (0);
 	}
 	config->hosts_count++;
-	printf("Added host: %s -> %s\n", hostname, ip);
 	return (1);
 }
 
@@ -250,7 +249,6 @@ static int	parse_hosts_from_file(t_config *config, const char *filename)
 			count++;
 	}
 	fclose(file);
-	printf("Parsed %d hosts from file '%s'\n", count, filename);
 	return (count > 0);
 }
 

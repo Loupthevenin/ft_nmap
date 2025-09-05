@@ -112,32 +112,6 @@ static t_listener_arg	*create_listener(pthread_t *listener, t_config *config)
 	return (larg);
 }
 
-static void	wait_for_timeout(t_config *config, t_listener_arg *larg,
-		pthread_t *listener)
-{
-	pcap_t	*handle;
-	long	now;
-	long	last_packet_time;
-
-	while (1)
-	{
-		pthread_mutex_lock(&larg->handle_mutex);
-		handle = larg->handle;
-		pthread_mutex_unlock(&larg->handle_mutex);
-		pthread_mutex_lock(&config->packet_time_mutex);
-		last_packet_time = config->last_packet_time;
-		pthread_mutex_unlock(&config->packet_time_mutex);
-		now = get_now_ms();
-		if (now - last_packet_time >= TIMEOUT)
-			break ;
-		usleep(100000);
-	}
-	if (handle)
-		pcap_breakloop(handle);
-	pthread_join(*listener, NULL);
-	pcap_close(handle);
-}
-
 static void	create_sender(int sock_tcp, int sock_udp, t_config *config)
 {
 	pthread_t		*threads;
@@ -181,6 +155,32 @@ static void	create_sender(int sock_tcp, int sock_udp, t_config *config)
 	free(threads);
 }
 
+static void	wait_for_timeout(t_config *config, t_listener_arg *larg,
+		pthread_t *listener)
+{
+	pcap_t	*handle;
+	long	now;
+	long	last_packet_time;
+
+	while (1)
+	{
+		pthread_mutex_lock(&larg->handle_mutex);
+		handle = larg->handle;
+		pthread_mutex_unlock(&larg->handle_mutex);
+		pthread_mutex_lock(&config->packet_time_mutex);
+		last_packet_time = config->last_packet_time;
+		pthread_mutex_unlock(&config->packet_time_mutex);
+		now = get_now_ms();
+		if (now - last_packet_time >= TIMEOUT)
+			break ;
+		usleep(100000);
+	}
+	if (handle)
+		pcap_breakloop(handle);
+	pthread_join(*listener, NULL);
+	pcap_close(handle);
+}
+
 static void	run_scan(t_config *config)
 {
 	int				sock_tcp;
@@ -191,7 +191,6 @@ static void	run_scan(t_config *config)
 	sock_tcp = -1;
 	sock_udp = -1;
 	get_local_ip(config->local_ip, sizeof(config->local_ip));
-	printf("local_ip: %s\n", config->local_ip);
 	larg = create_listener(&listener, config);
 	if (!larg)
 		return ;

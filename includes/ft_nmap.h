@@ -143,6 +143,13 @@ int					create_tcp_packet(char *buff, const char *src_ip,
 int					create_udp_packet(char *buff, const char *src_ip,
 						const char *dst_ip, int sport, int dport);
 
+// Display
+void				print_help(void);
+void				print_header(t_config *config);
+void				print_config(const t_config *config);
+void				print_results(t_config *config);
+void				print_timer(struct timespec *start, struct timespec *end);
+
 // Utils
 size_t				ft_strlcat(char *dst, const char *src, size_t dstsize);
 int					get_local_ip(char *buffer, size_t buflen);
@@ -150,11 +157,6 @@ int					get_datalink_offset(pcap_t *handle);
 const char			*get_service_name(int port, const char *proto);
 unsigned short		cksum(unsigned short *buf, int n);
 long				get_now_ms(void);
-void				print_help(void);
-void				print_header(t_config *config);
-void				print_config(const t_config *config);
-void				print_results(t_config *config);
-void				print_timer(struct timespec *start, struct timespec *end);
 void				free_config(t_config *config);
 
 #endif
