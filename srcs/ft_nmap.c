@@ -164,9 +164,6 @@ static void	wait_for_timeout(t_config *config, t_listener_arg *larg,
 
 	while (1)
 	{
-		pthread_mutex_lock(&larg->handle_mutex);
-		handle = larg->handle;
-		pthread_mutex_unlock(&larg->handle_mutex);
 		pthread_mutex_lock(&config->packet_time_mutex);
 		last_packet_time = config->last_packet_time;
 		pthread_mutex_unlock(&config->packet_time_mutex);
@@ -175,8 +172,11 @@ static void	wait_for_timeout(t_config *config, t_listener_arg *larg,
 			break ;
 		usleep(100000);
 	}
+	pthread_mutex_lock(&larg->handle_mutex);
+	handle = larg->handle;
 	if (handle)
 		pcap_breakloop(handle);
+	pthread_mutex_unlock(&larg->handle_mutex);
 	pthread_join(*listener, NULL);
 	pcap_close(handle);
 }

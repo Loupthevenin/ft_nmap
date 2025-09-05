@@ -146,7 +146,6 @@ int					create_udp_packet(char *buff, const char *src_ip,
 // Display
 void				print_help(void);
 void				print_header(t_config *config);
-void				print_config(const t_config *config);
 void				print_results(t_config *config);
 void				print_timer(struct timespec *start, struct timespec *end);
 
