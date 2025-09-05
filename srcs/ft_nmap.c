@@ -221,6 +221,7 @@ int	main(int argc, char **argv)
 
 	if (parse_args(&config, argc, argv) == -1)
 	{
+		print_help();
 		free_config(&config);
 		return (1);
 	}
