@@ -258,21 +258,17 @@ static const char	*get_conclusion(t_result *res)
 	{
 		if (!res->scan_results[j])
 			continue ;
-		if (strstr(res->scan_results[j], SCAN_OPEN))
+		if (strcmp(res->scan_results[j], SCAN_OPEN) == 0)
 			has_open = 1;
-		if (strstr(res->scan_results[j], SCAN_CLOSED))
+		if (strcmp(res->scan_results[j], SCAN_CLOSED) == 0)
 			has_closed = 1;
-		if (strstr(res->scan_results[j], SCAN_FILTERED))
+		if (strcmp(res->scan_results[j], SCAN_FILTERED) == 0)
 			has_filtered = 1;
-		if (strstr(res->scan_results[j], SCAN_UNFILTERED))
+		if (strcmp(res->scan_results[j], SCAN_UNFILTERED) == 0)
 			has_unfiltered = 1;
 	}
 	if (has_open)
-	{
-		if (has_filtered)
-			return (SCAN_OPEN_FILTERED);
 		return (SCAN_OPEN);
-	}
 	if (has_closed && !has_filtered && !has_unfiltered)
 		return (SCAN_CLOSED);
 	if (has_filtered)
@@ -324,7 +320,6 @@ void	print_results(t_config *config)
 {
 	t_host		*host;
 	t_result	*res;
-	int			is_open;
 
 	for (int h = 0; h < config->hosts_count; h++)
 	{
@@ -332,51 +327,31 @@ void	print_results(t_config *config)
 		printf("Results for host %s (%s):\n", host->hostname, host->ip);
 		// Trier les résultats par port
 		qsort(host->result, host->ports_count, sizeof(t_result), cmp_ports);
+		// Calculer la conclusion de tous les ports
+		for (int i = 0; i < host->ports_count; i++)
+		{
+			res = &host->result[i];
+			res->conclusion = (char *)get_conclusion(res);
+		}
+		// Afficher les ports Open
 		printf("Open ports:\n");
 		printf("Port  Service Name           Results       Conclusion\n");
 		printf("---------------------------------------------------------------------------------------------------\n");
-		// Ports ouverts
 		for (int i = 0; i < host->ports_count; i++)
 		{
 			res = &host->result[i];
-			is_open = 0;
-			for (int j = 0; j < INDEX_COUNT; j++)
-			{
-				if (res->scan_results[j] && strstr(res->scan_results[j],
-						"Open"))
-				{
-					is_open = 1;
-					break ;
-				}
-			}
-			if (is_open)
-			{
-				res->conclusion = (char *)get_conclusion(res);
+			if (strcmp(res->conclusion, SCAN_OPEN) == 0)
 				print_port_results(res);
-			}
 		}
+		// Afficher les autres ports
 		printf("\nClosed/Filtered/Unfiltered ports:\n");
 		printf("Port  Service Name           Results       Conclusion\n");
 		printf("---------------------------------------------------------------------------------------------------\n");
-		// Ports non ouverts
 		for (int i = 0; i < host->ports_count; i++)
 		{
 			res = &host->result[i];
-			is_open = 0;
-			for (int j = 0; j < INDEX_COUNT; j++)
-			{
-				if (res->scan_results[j] && strstr(res->scan_results[j],
-						"Open"))
-				{
-					is_open = 1;
-					break ;
-				}
-			}
-			if (!is_open)
-			{
-				res->conclusion = (char *)get_conclusion(res);
+			if (strcmp(res->conclusion, SCAN_OPEN) != 0)
 				print_port_results(res);
-			}
 		}
 		printf("\n");
 	}
@@ -433,8 +408,6 @@ void	free_config(t_config *config)
 					res = &host->result[p];
 					if (res->service)
 						free(res->service);
-					if (res->conclusion)
-						free(res->conclusion);
 				}
 				free(host->result);
 			}

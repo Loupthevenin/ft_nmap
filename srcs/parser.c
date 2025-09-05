@@ -164,7 +164,6 @@ static int	parse_ports(t_config *config, const char *ports_str)
 			{
 				free(copy);
 				free(list);
-				free(config->ports);
 				return (0);
 			}
 			for (int i = start; i <= end; i++)
@@ -176,7 +175,6 @@ static int	parse_ports(t_config *config, const char *ports_str)
 			{
 				free(copy);
 				free(list);
-				free(config->ports);
 				return (0);
 			}
 			list[idx++] = atoi(token);
@@ -184,6 +182,9 @@ static int	parse_ports(t_config *config, const char *ports_str)
 		token = strtok(NULL, ",");
 	}
 	free(copy);
+	if (config->ports)
+		free(config->ports);
+	config->ports = strdup(ports_str);
 	config->ports_list = realloc(list, sizeof(int) * idx);
 	config->ports_count = idx;
 	return (1);
