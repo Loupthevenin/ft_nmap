@@ -105,7 +105,7 @@ static const char	*get_conclusion(t_result *res)
 
 static void	print_port_results(t_result *res)
 {
-	printf("%-5d %-20s ", res->port,
+	printf("%-7d %-25s ", res->port,
 			res->service ? res->service : get_service_name(res->port, "tcp"));
 	for (int j = 0; j < INDEX_COUNT; j++)
 	{
@@ -137,7 +137,18 @@ static void	print_port_results(t_result *res)
 		}
 	}
 	if (res->conclusion)
-		printf("%s", res->conclusion);
+	{
+		if (strcmp(res->conclusion, SCAN_OPEN) == 0)
+			printf("%s%s%s", COLOR_GREEN, res->conclusion, COLOR_RESET);
+		else if (strcmp(res->conclusion, SCAN_CLOSED) == 0)
+			printf("%s%s%s", COLOR_RED, res->conclusion, COLOR_RESET);
+		else if (strcmp(res->conclusion, SCAN_FILTERED) == 0)
+			printf("%s%s%s", COLOR_YELLOW, res->conclusion, COLOR_RESET);
+		else if (strcmp(res->conclusion, SCAN_UNFILTERED) == 0)
+			printf("%s%s%s", COLOR_BLUE, res->conclusion, COLOR_RESET);
+		else
+			printf("%s", res->conclusion);
+	}
 	printf("\n");
 }
 
@@ -161,7 +172,7 @@ void	print_results(t_config *config)
 		}
 		// Afficher les ports Open
 		printf("Open ports:\n");
-		printf("Port  Service Name           Results       Conclusion\n");
+		printf("Port    Service Name              Results                             Conclusion\n");
 		printf("---------------------------------------------------------------------------------------------------\n");
 		for (int i = 0; i < host->ports_count; i++)
 		{
@@ -171,7 +182,7 @@ void	print_results(t_config *config)
 		}
 		// Afficher les autres ports
 		printf("\nClosed/Filtered/Unfiltered ports:\n");
-		printf("Port  Service Name           Results       Conclusion\n");
+		printf("Port    Service Name              Results                             Conclusion\n");
 		printf("---------------------------------------------------------------------------------------------------\n");
 		for (int i = 0; i < host->ports_count; i++)
 		{
