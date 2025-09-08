@@ -146,8 +146,6 @@ void				*thread_send(void *arg);
 int					create_tcp_packet(char *buff, const char *src_ip,
 						const char *dst_ip, int sport, int dport,
 						int scan_type);
-int					create_udp_packet(char *buff, const char *src_ip,
-						const char *dst_ip, int sport, int dport);
 
 // Display
 void				print_help(void);

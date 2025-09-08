@@ -64,21 +64,3 @@ int create_tcp_packet(char *buff, const char *src_ip, const char *dst_ip,
 
   return (ip_size + sizeof(struct tcphdr) + options_len + payload_len);
 }
-
-int	create_udp_packet(char *buff, const char *src_ip, const char *dst_ip,
-		int sport, int dport)
-{
-	struct udphdr	*udph;
-	size_t			ip_size;
-
-	ip_size = create_ip_packet(buff, src_ip, dst_ip, IPPROTO_UDP,
-			sizeof(struct udphdr));
-	udph = (struct udphdr *)(buff + ip_size);
-	memset(udph, 0, sizeof(struct udphdr));
-	// UDP header
-	udph->source = htons(sport);
-	udph->dest = htons(dport);
-	udph->len = htons(sizeof(struct udphdr));
-	udph->check = 0; // optionnel, Linux RAW socket ignore
-	return (ip_size + sizeof(struct udphdr));
-}
